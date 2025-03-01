@@ -1,0 +1,19 @@
+basePath: /api/v1/
+host: localhost:8080
+info:
+  contact: {}
+  description: API для управления задачами
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: API для управления задачами
+  version: "1.0"
+paths: {}
+schemes:
+- http
+securityDefinitions:
+  JWT:
+    in: header
+    name: token
+    type: apiKey
+swagger: "2.0"
