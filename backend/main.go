@@ -39,11 +39,16 @@ func main() {
 
 	v1 := r.Group("/api/v1")
 	{
+		// Маршрут для входа и получения JWT
+		v1.POST("/login", LoginHandler)
+
 		// @Summary Получить все задачи
 		// @Tags tasks
 		// @Success 200 {array} Task
 		// @Router /tasks [get]
 		v1.GET("/tasks", GetTasks)
+
+		v1.Use(AuthMiddleware())
 
 		// @Summary Создать новую задачу
 		// @Tags tasks

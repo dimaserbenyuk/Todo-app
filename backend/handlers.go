@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -31,6 +32,10 @@ func CreateTask(c *gin.Context) {
 		return
 	}
 	task.ID = primitive.NewObjectID()
+	now := time.Now()
+	task.CreatedAt = now
+	task.UpdatedAt = now
+
 	_, err := TaskCollection.InsertOne(context.Background(), task)
 	if err != nil {
 		log.Fatal(err)
@@ -48,6 +53,7 @@ func UpdateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	task.UpdatedAt = time.Now()
 
 	update := bson.M{"$set": task}
 	_, err := TaskCollection.UpdateOne(context.Background(), bson.M{"_id": objectID}, update)
