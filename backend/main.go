@@ -4,6 +4,7 @@ import (
 	"log"
 
 	_ "github.com/dmytroserbeniuk/todo-backend/docs" // Подключение swagger документации
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
@@ -37,6 +38,15 @@ func main() {
 
 	// Создаём маршруты
 	r := gin.Default()
+
+	// Кастомная настройка CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://example.com", "http://localhost:3000"}, // Список разрешённых источников
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},                // Разрешённые HTTP методы
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},     // Разрешённые заголовки
+		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},           // Заголовки, которые будут доступны на клиенте
+		AllowCredentials: true,                                                    // Разрешение на использование cookies или заголовков авторизации
+	}))
 
 	// Открытые маршруты (не требуют токена)
 	r.POST("/api/v1/register", RegisterHandler) // ✅ Открытая регистрация
