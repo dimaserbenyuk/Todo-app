@@ -15,7 +15,7 @@ COPY . .
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 # Генерируем Swagger документацию
-RUN swag init
+RUN swag init --parseDependency --parseInternal
 
 # Сборка приложения
 RUN go build -o todo-app

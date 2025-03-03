@@ -18,7 +18,120 @@ const docTemplate = `{
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
-    "paths": {},
+    "paths": {
+        "/tasks/{id}": {
+            "put": {
+                "description": "Обновляет существующую задачу по ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Обновление задачи",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID задачи",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Обновленные данные задачи",
+                        "name": "task",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.Task"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Сообщение об успешном обновлении",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Некорректные данные",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка сервера",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "gin.H": {
+            "type": "object",
+            "additionalProperties": {}
+        },
+        "main.Task": {
+            "description": "Структура для представления задачи",
+            "type": "object",
+            "properties": {
+                "assignee": {
+                    "description": "@Description Исполнитель задачи\n@example \"Иван Петров\"",
+                    "type": "string"
+                },
+                "completed": {
+                    "description": "@Description Статус выполнения задачи\n@example false",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "description": "@Description Дата создания задачи\n@example \"2025-03-01T10:00:00Z\"",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "@Description Описание задачи\n@example \"Купить молоко, хлеб и фрукты\"",
+                    "type": "string"
+                },
+                "due_date": {
+                    "description": "@Description Дата и время выполнения задачи (ISO 8601)\n@example \"2025-03-05T12:00:00Z\"",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "@Description Уникальный идентификатор задачи\n@example 60d5f8f6e4b0b3a520bdbb9b",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "@Description Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)\n@example 2",
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "@Description Статус задачи (pending, in_progress, done)\n@example \"in_progress\"",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "@Description Теги задачи\n@example [\"work\", \"urgent\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "@Description Название задачи\n@example \"Закупить продукты\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "@Description Дата последнего обновления задачи\n@example \"2025-03-01T10:30:00Z\"",
+                    "type": "string"
+                }
+            }
+        }
+    },
     "securityDefinitions": {
         "JWT": {
             "type": "apiKey",

@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +17,8 @@ import (
 )
 
 var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+var jwtIssuer = os.Getenv("JWT_ISSUER")
+var jwtExpirationMinutes, _ = strconv.Atoi(os.Getenv("JWT_EXPIRATION_MINUTES"))
 
 // Claims - структура для хранения данных в токене
 type Claims struct {
@@ -26,11 +28,12 @@ type Claims struct {
 
 // GenerateToken - генерация JWT токена
 func GenerateToken(username string) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+	expirationTime := time.Now().Add(time.Duration(jwtExpirationMinutes) * time.Minute)
 	claims := &Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Issuer:    jwtIssuer,
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -145,41 +148,31 @@ func LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-
 // AuthMiddleware - Middleware для проверки JWT-токена
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
 
-		// Проверяем, что заголовок Authorization присутствует
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Токен отсутствует или некорректный"})
 			c.Abort()
 			return
 		}
 
-		// Убираем "Bearer " из токена
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
-
-		// Проверяем и валидируем токен
-		secretKey := os.Getenv("JWT_SECRET")
-		if secretKey == "" {
-			log.Fatal("❌ JWT_SECRET не задан в .env файле")
-		}
-
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
-			return []byte(secretKey), nil
-		})
-
-		if err != nil || !token.Valid {
+		claims, err := ValidateToken(tokenString)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Невалидный токен"})
 			c.Abort()
 			return
 		}
 
-		c.Next() // Продолжаем выполнение запроса
+		if claims.Issuer != jwtIssuer {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный издатель токена"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
 	}
 }

@@ -7,64 +7,95 @@ import (
 )
 
 // Task - структура для задачи
-// @Description Структура для представления задачи
+// @Description Структура, представляющая задачу в системе
+// @Tags Tasks
+// @Produce json
 type Task struct {
-	// @Description Уникальный идентификатор задачи
+	// ID - Уникальный идентификатор задачи
 	// @example 60d5f8f6e4b0b3a520bdbb9b
 	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 
-	// @Description Название задачи
+	// Title - Название задачи
 	// @example "Закупить продукты"
 	Title string `bson:"title" json:"title"`
 
-	// @Description Описание задачи
+	// Description - Описание задачи
 	// @example "Купить молоко, хлеб и фрукты"
 	Description string `bson:"description,omitempty" json:"description,omitempty"`
 
-	// @Description Статус выполнения задачи
+	// Completed - Статус выполнения задачи
 	// @example false
 	Completed bool `bson:"completed" json:"completed"`
 
-	// @Description Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
+	// Priority - Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
 	// @example 2
 	Priority int `bson:"priority,omitempty" json:"priority,omitempty"`
 
-	// @Description Дата и время выполнения задачи (ISO 8601)
+	// DueDate - Дата и время выполнения задачи (ISO 8601)
 	// @example "2025-03-05T12:00:00Z"
 	DueDate time.Time `bson:"due_date,omitempty" json:"due_date,omitempty"`
 
-	// @Description Дата создания задачи
+	// CreatedAt - Дата создания задачи
 	// @example "2025-03-01T10:00:00Z"
 	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
 
-	// @Description Дата последнего обновления задачи
+	// UpdatedAt - Дата последнего обновления задачи
 	// @example "2025-03-01T10:30:00Z"
 	UpdatedAt time.Time `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 
-	// @Description Статус задачи (pending, in_progress, done)
+	// Status - Статус задачи (pending, in_progress, done)
 	// @example "in_progress"
 	Status string `bson:"status,omitempty" json:"status,omitempty"`
 
-	// @Description Теги задачи
+	// Tags - Теги задачи
 	// @example ["work", "urgent"]
 	Tags []string `bson:"tags,omitempty" json:"tags,omitempty"`
 
-	// @Description Исполнитель задачи
+	// Assignee - Исполнитель задачи
 	// @example "Иван Петров"
 	Assignee string `bson:"assignee,omitempty" json:"assignee,omitempty"`
 }
 
 // User - структура пользователя в MongoDB
+// @Description Структура для хранения данных о пользователе
+// @Tags Users
+// @Produce json
 type User struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username  string             `bson:"username" json:"username"`
-	Password  string             `bson:"password" json:"-"`
-	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	// ID - Уникальный идентификатор пользователя
+	// @example 60d5f8f6e4b0b3a520bdbb9c
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+
+	// Username - Имя пользователя
+	// @example "ivan_petrov"
+	Username string `bson:"username" json:"username"`
+
+	// Password - Хэш пароля пользователя
+	// @example "hashed_password"
+	Password string `bson:"password" json:"-"`
+
+	// CreatedAt - Дата регистрации пользователя
+	// @example "2025-03-01T10:00:00Z"
+	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
+// Token - структура для хранения JWT-токена
+// @Description Структура, представляющая токен пользователя
+// @Tags Auth
+// @Produce json
 type Token struct {
-    ID        primitive.ObjectID `bson:"_id,omitempty"`
-    Username  string             `bson:"username"`
-    Token     string             `bson:"token"`
-    ExpiresAt time.Time          `bson:"expires_at"`
+	// ID - Уникальный идентификатор токена
+	// @example 60d5f8f6e4b0b3a520bdbb9d
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+
+	// Username - Имя пользователя, связанного с токеном
+	// @example "ivan_petrov"
+	Username string `bson:"username" json:"username"`
+
+	// Token - Сам JWT-токен
+	// @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+	Token string `bson:"token" json:"token"`
+
+	// ExpiresAt - Дата истечения срока действия токена
+	// @example "2025-03-02T10:00:00Z"
+	ExpiresAt time.Time `bson:"expires_at" json:"expires_at"`
 }

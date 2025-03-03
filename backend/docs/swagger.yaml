@@ -1,4 +1,69 @@
 basePath: /api/v1/
+definitions:
+  gin.H:
+    additionalProperties: {}
+    type: object
+  main.Task:
+    description: Структура для представления задачи
+    properties:
+      assignee:
+        description: |-
+          @Description Исполнитель задачи
+          @example "Иван Петров"
+        type: string
+      completed:
+        description: |-
+          @Description Статус выполнения задачи
+          @example false
+        type: boolean
+      created_at:
+        description: |-
+          @Description Дата создания задачи
+          @example "2025-03-01T10:00:00Z"
+        type: string
+      description:
+        description: |-
+          @Description Описание задачи
+          @example "Купить молоко, хлеб и фрукты"
+        type: string
+      due_date:
+        description: |-
+          @Description Дата и время выполнения задачи (ISO 8601)
+          @example "2025-03-05T12:00:00Z"
+        type: string
+      id:
+        description: |-
+          @Description Уникальный идентификатор задачи
+          @example 60d5f8f6e4b0b3a520bdbb9b
+        type: string
+      priority:
+        description: |-
+          @Description Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
+          @example 2
+        type: integer
+      status:
+        description: |-
+          @Description Статус задачи (pending, in_progress, done)
+          @example "in_progress"
+        type: string
+      tags:
+        description: |-
+          @Description Теги задачи
+          @example ["work", "urgent"]
+        items:
+          type: string
+        type: array
+      title:
+        description: |-
+          @Description Название задачи
+          @example "Закупить продукты"
+        type: string
+      updated_at:
+        description: |-
+          @Description Дата последнего обновления задачи
+          @example "2025-03-01T10:30:00Z"
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -8,7 +73,42 @@ info:
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   title: API для управления задачами
   version: "1.0"
-paths: {}
+paths:
+  /tasks/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет существующую задачу по ID
+      parameters:
+      - description: ID задачи
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Обновленные данные задачи
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/main.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Сообщение об успешном обновлении
+          schema:
+            $ref: '#/definitions/gin.H'
+        "400":
+          description: Некорректные данные
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Ошибка сервера
+          schema:
+            $ref: '#/definitions/gin.H'
+      summary: Обновление задачи
+      tags:
+      - Tasks
 schemes:
 - http
 securityDefinitions:
