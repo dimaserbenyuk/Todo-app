@@ -5,7 +5,7 @@ import (
 
 	_ "github.com/dmytroserbeniuk/todo-backend/docs" // Подключение swagger документации
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv" // Импортируем godotenv
+	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -37,42 +37,18 @@ func main() {
 	// Создаём маршруты
 	r := gin.Default()
 
-	v1 := r.Group("/api/v1")
+	// Открытые маршруты (не требуют токена)
+	r.POST("/api/v1/register", RegisterHandler) // ✅ Открытая регистрация
+	r.POST("/api/v1/login", LoginHandler)       // ✅ Открытый вход
+
+	// Защищённые маршруты (требуют токен)
+	auth := r.Group("/api/v1")
+	auth.Use(AuthMiddleware())
 	{
-		// Маршрут для входа и получения JWT
-		v1.POST("/login", LoginHandler)
-
-		// @Summary Получить все задачи
-		// @Tags tasks
-		// @Success 200 {array} Task
-		// @Router /tasks [get]
-		v1.GET("/tasks", GetTasks)
-
-		v1.Use(AuthMiddleware())
-
-		// @Summary Создать новую задачу
-		// @Tags tasks
-		// @Param task body Task true "Task to create"
-		// @Success 201 {object} Task
-		// @Router /tasks [post]
-		v1.POST("/tasks", CreateTask)
-
-		// @Summary Обновить задачу
-		// @Tags tasks
-		// @Param id path string true "Task ID"
-		// @Param task body Task true "Updated task"
-		// @Success 200 {object} Task
-		// @Failure 400 {object} gin.H{"error": "Bad request"}
-		// @Router /tasks/{id} [put]
-		v1.PUT("/tasks/:id", UpdateTask)
-
-		// @Summary Удалить задачу
-		// @Tags tasks
-		// @Param id path string true "Task ID"
-		// @Success 204 {object} nil
-		// @Failure 404 {object} gin.H{"error": "Task not found"}
-		// @Router /tasks/{id} [delete]
-		v1.DELETE("/tasks/:id", DeleteTask)
+		auth.GET("/tasks", GetTasks)
+		auth.POST("/tasks", CreateTask)
+		auth.PUT("/tasks/:id", UpdateTask)
+		auth.DELETE("/tasks/:id", DeleteTask)
 	}
 
 	// Swagger документация

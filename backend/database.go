@@ -13,30 +13,35 @@ import (
 // TaskCollection - коллекция задач в MongoDB
 var TaskCollection *mongo.Collection
 
+// UserCollection - коллекция пользователей в MongoDB
+var UserCollection *mongo.Collection
+
+// TokenCollection - коллекция токенов в MongoDB
+var TokenCollection *mongo.Collection
+
 // initDB - инициализация подключения к базе данных
 func initDB() {
-	// Загружаем MONGO_URI из переменных окружения
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
 		log.Fatal("❌ MONGO_URI не задан в .env файле")
 	}
 
-	// Настройки клиента MongoDB
 	clientOptions := options.Client().ApplyURI(mongoURI).SetConnectTimeout(10 * time.Second)
 
-	// Подключение к MongoDB
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
 		log.Fatalf("❌ Ошибка подключения к MongoDB: %v", err)
 	}
 
-	// Проверка соединения
 	err = client.Ping(context.Background(), nil)
 	if err != nil {
 		log.Fatalf("❌ Не удалось подключиться к MongoDB: %v", err)
 	}
 
-	// Устанавливаем коллекцию
+	// Устанавливаем коллекции
 	TaskCollection = client.Database("todo_db").Collection("tasks")
+	UserCollection = client.Database("todo_db").Collection("users")
+	TokenCollection = client.Database("todo_db").Collection("tokens") // Добавлено
+
 	log.Println("✅ Успешное подключение к MongoDB")
 }

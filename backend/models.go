@@ -54,3 +54,17 @@ type Task struct {
 	Assignee string `bson:"assignee,omitempty" json:"assignee,omitempty"`
 }
 
+// User - структура пользователя в MongoDB
+type User struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username  string             `bson:"username" json:"username"`
+	Password  string             `bson:"password" json:"-"`
+	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+}
+
+type Token struct {
+    ID        primitive.ObjectID `bson:"_id,omitempty"`
+    Username  string             `bson:"username"`
+    Token     string             `bson:"token"`
+    ExpiresAt time.Time          `bson:"expires_at"`
+}
