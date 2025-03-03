@@ -19,9 +19,14 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/tasks/{id}": {
-            "put": {
-                "description": "Обновляет существующую задачу по ID",
+        "/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Возвращает массив всех задач",
                 "consumes": [
                     "application/json"
                 ],
@@ -31,7 +36,93 @@ const docTemplate = `{
                 "tags": [
                     "Tasks"
                 ],
-                "summary": "Обновление задачи",
+                "summary": "Получить список задач",
+                "responses": {
+                    "200": {
+                        "description": "Список задач",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/main.Task"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка сервера",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Добавляет новую задачу в базу данных",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Создать задачу",
+                "parameters": [
+                    {
+                        "description": "Данные новой задачи",
+                        "name": "task",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.Task"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Созданная задача",
+                        "schema": {
+                            "$ref": "#/definitions/main.Task"
+                        }
+                    },
+                    "400": {
+                        "description": "Некорректные данные",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка сервера",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Обновляет существующую задачу по её ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Обновить задачу",
                 "parameters": [
                     {
                         "type": "string",
@@ -70,6 +161,47 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Удаляет задачу по её ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Удалить задачу",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID задачи",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Сообщение об успешном удалении",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка сервера",
+                        "schema": {
+                            "$ref": "#/definitions/gin.H"
+                        }
+                    }
+                }
             }
         }
     },
@@ -79,63 +211,64 @@ const docTemplate = `{
             "additionalProperties": {}
         },
         "main.Task": {
-            "description": "Структура для представления задачи",
+            "description": "Структура, представляющая задачу в системе",
             "type": "object",
             "properties": {
                 "assignee": {
-                    "description": "@Description Исполнитель задачи\n@example \"Иван Петров\"",
+                    "description": "Assignee - Исполнитель задачи\n@example \"Иван Петров\"",
                     "type": "string"
                 },
                 "completed": {
-                    "description": "@Description Статус выполнения задачи\n@example false",
+                    "description": "Completed - Статус выполнения задачи\n@example false",
                     "type": "boolean"
                 },
                 "created_at": {
-                    "description": "@Description Дата создания задачи\n@example \"2025-03-01T10:00:00Z\"",
+                    "description": "CreatedAt - Дата создания задачи\n@example \"2025-03-01T10:00:00Z\"",
                     "type": "string"
                 },
                 "description": {
-                    "description": "@Description Описание задачи\n@example \"Купить молоко, хлеб и фрукты\"",
+                    "description": "Description - Описание задачи\n@example \"Купить молоко, хлеб и фрукты\"",
                     "type": "string"
                 },
                 "due_date": {
-                    "description": "@Description Дата и время выполнения задачи (ISO 8601)\n@example \"2025-03-05T12:00:00Z\"",
+                    "description": "DueDate - Дата и время выполнения задачи (ISO 8601)\n@example \"2025-03-05T12:00:00Z\"",
                     "type": "string"
                 },
                 "id": {
-                    "description": "@Description Уникальный идентификатор задачи\n@example 60d5f8f6e4b0b3a520bdbb9b",
+                    "description": "ID - Уникальный идентификатор задачи\n@example 60d5f8f6e4b0b3a520bdbb9b",
                     "type": "string"
                 },
                 "priority": {
-                    "description": "@Description Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)\n@example 2",
+                    "description": "Priority - Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)\n@example 2",
                     "type": "integer"
                 },
                 "status": {
-                    "description": "@Description Статус задачи (pending, in_progress, done)\n@example \"in_progress\"",
+                    "description": "Status - Статус задачи (pending, in_progress, done)\n@example \"in_progress\"",
                     "type": "string"
                 },
                 "tags": {
-                    "description": "@Description Теги задачи\n@example [\"work\", \"urgent\"]",
+                    "description": "Tags - Теги задачи\n@example [\"work\", \"urgent\"]",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
                 "title": {
-                    "description": "@Description Название задачи\n@example \"Закупить продукты\"",
+                    "description": "Title - Название задачи\n@example \"Закупить продукты\"",
                     "type": "string"
                 },
                 "updated_at": {
-                    "description": "@Description Дата последнего обновления задачи\n@example \"2025-03-01T10:30:00Z\"",
+                    "description": "UpdatedAt - Дата последнего обновления задачи\n@example \"2025-03-01T10:30:00Z\"",
                     "type": "string"
                 }
             }
         }
     },
     "securityDefinitions": {
-        "JWT": {
+        "BearerAuth": {
+            "description": "Введите токен в формате \"Bearer {token}\"",
             "type": "apiKey",
-            "name": "token",
+            "name": "Authorization",
             "in": "header"
         }
     }

@@ -14,9 +14,10 @@ import (
 // @version  1.0
 // @description API для управления задачами
 
-// @securityDefinitions.apiKey JWT
-// @in       header
-// @name      token
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Введите токен в формате "Bearer {token}"
 
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html

@@ -4,63 +4,63 @@ definitions:
     additionalProperties: {}
     type: object
   main.Task:
-    description: Структура для представления задачи
+    description: Структура, представляющая задачу в системе
     properties:
       assignee:
         description: |-
-          @Description Исполнитель задачи
+          Assignee - Исполнитель задачи
           @example "Иван Петров"
         type: string
       completed:
         description: |-
-          @Description Статус выполнения задачи
+          Completed - Статус выполнения задачи
           @example false
         type: boolean
       created_at:
         description: |-
-          @Description Дата создания задачи
+          CreatedAt - Дата создания задачи
           @example "2025-03-01T10:00:00Z"
         type: string
       description:
         description: |-
-          @Description Описание задачи
+          Description - Описание задачи
           @example "Купить молоко, хлеб и фрукты"
         type: string
       due_date:
         description: |-
-          @Description Дата и время выполнения задачи (ISO 8601)
+          DueDate - Дата и время выполнения задачи (ISO 8601)
           @example "2025-03-05T12:00:00Z"
         type: string
       id:
         description: |-
-          @Description Уникальный идентификатор задачи
+          ID - Уникальный идентификатор задачи
           @example 60d5f8f6e4b0b3a520bdbb9b
         type: string
       priority:
         description: |-
-          @Description Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
+          Priority - Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
           @example 2
         type: integer
       status:
         description: |-
-          @Description Статус задачи (pending, in_progress, done)
+          Status - Статус задачи (pending, in_progress, done)
           @example "in_progress"
         type: string
       tags:
         description: |-
-          @Description Теги задачи
+          Tags - Теги задачи
           @example ["work", "urgent"]
         items:
           type: string
         type: array
       title:
         description: |-
-          @Description Название задачи
+          Title - Название задачи
           @example "Закупить продукты"
         type: string
       updated_at:
         description: |-
-          @Description Дата последнего обновления задачи
+          UpdatedAt - Дата последнего обновления задачи
           @example "2025-03-01T10:30:00Z"
         type: string
     type: object
@@ -74,11 +74,91 @@ info:
   title: API для управления задачами
   version: "1.0"
 paths:
+  /tasks:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает массив всех задач
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список задач
+          schema:
+            items:
+              $ref: '#/definitions/main.Task'
+            type: array
+        "500":
+          description: Ошибка сервера
+          schema:
+            $ref: '#/definitions/gin.H'
+      security:
+      - BearerAuth: []
+      summary: Получить список задач
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: Добавляет новую задачу в базу данных
+      parameters:
+      - description: Данные новой задачи
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/main.Task'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Созданная задача
+          schema:
+            $ref: '#/definitions/main.Task'
+        "400":
+          description: Некорректные данные
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Ошибка сервера
+          schema:
+            $ref: '#/definitions/gin.H'
+      security:
+      - BearerAuth: []
+      summary: Создать задачу
+      tags:
+      - Tasks
   /tasks/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет задачу по её ID
+      parameters:
+      - description: ID задачи
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Сообщение об успешном удалении
+          schema:
+            $ref: '#/definitions/gin.H'
+        "500":
+          description: Ошибка сервера
+          schema:
+            $ref: '#/definitions/gin.H'
+      security:
+      - BearerAuth: []
+      summary: Удалить задачу
+      tags:
+      - Tasks
     put:
       consumes:
       - application/json
-      description: Обновляет существующую задачу по ID
+      description: Обновляет существующую задачу по её ID
       parameters:
       - description: ID задачи
         in: path
@@ -106,14 +186,17 @@ paths:
           description: Ошибка сервера
           schema:
             $ref: '#/definitions/gin.H'
-      summary: Обновление задачи
+      security:
+      - BearerAuth: []
+      summary: Обновить задачу
       tags:
       - Tasks
 schemes:
 - http
 securityDefinitions:
-  JWT:
+  BearerAuth:
+    description: Введите токен в формате "Bearer {token}"
     in: header
-    name: token
+    name: Authorization
     type: apiKey
 swagger: "2.0"
