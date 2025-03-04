@@ -33,7 +33,7 @@ WORKDIR /root/
 COPY --from=builder /app/todo-app .
 COPY --from=builder /app/docs /root/docs
 
-COPY .env /root/
+# COPY .env /root/
 
 # Открываем порт
 EXPOSE 8080

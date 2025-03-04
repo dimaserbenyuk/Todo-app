@@ -27,10 +27,11 @@ import (
 
 // @schemes http
 func main() {
-	// Загружаем .env файл
-	err := godotenv.Load()
+
+	// Загружаем .env файл, если он существует
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Println("No .env file found, proceeding without it")
 	}
 
 	// Инициализация базы данных
