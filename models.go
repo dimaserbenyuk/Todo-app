@@ -83,19 +83,11 @@ type User struct {
 // @Tags Auth
 // @Produce json
 type Token struct {
-	// ID - Уникальный идентификатор токена
-	// @example 60d5f8f6e4b0b3a520bdbb9d
-	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-
-	// Username - Имя пользователя, связанного с токеном
-	// @example "ivan_petrov"
-	Username string `bson:"username" json:"username"`
-
-	// Token - Сам JWT-токен
-	// @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-	Token string `bson:"token" json:"token"`
-
-	// ExpiresAt - Дата истечения срока действия токена
-	// @example "2025-03-02T10:00:00Z"
-	ExpiresAt time.Time `bson:"expires_at" json:"expires_at"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username  string             `bson:"username" json:"username"`
+	Token     string             `bson:"token" json:"token"`
+	ExpiresAt time.Time          `bson:"expires_at" json:"expires_at"`
+	Device    string             `bson:"device,omitempty" json:"device,omitempty"`
+	IP        string             `bson:"ip,omitempty" json:"ip,omitempty"`
+	Revoked   bool               `bson:"revoked" json:"revoked"`
 }

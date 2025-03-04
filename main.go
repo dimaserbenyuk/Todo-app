@@ -52,6 +52,7 @@ func main() {
 	// Открытые маршруты (не требуют токена)
 	r.POST("/api/v1/register", RegisterHandler) // ✅ Открытая регистрация
 	r.POST("/api/v1/login", LoginHandler)       // ✅ Открытый вход
+	r.POST("/api/v1/logout", LogoutHandler)     // ✅ Выход, удаление Refresh Token
 
 	// Защищённые маршруты (требуют токен)
 	auth := r.Group("/api/v1")
@@ -61,6 +62,7 @@ func main() {
 		auth.POST("/tasks", CreateTask)
 		auth.PUT("/tasks/:id", UpdateTask)
 		auth.DELETE("/tasks/:id", DeleteTask)
+		auth.POST("/revoke", RevokeTokenHandler)
 	}
 
 	// Swagger документация

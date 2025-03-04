@@ -23,14 +23,18 @@ var jwtExpirationMinutes, _ = strconv.Atoi(os.Getenv("JWT_EXPIRATION_MINUTES"))
 // Claims - структура для хранения данных в токене
 type Claims struct {
 	Username string `json:"username"`
+	Device   string `json:"device,omitempty"`
+	IP       string `json:"ip,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken - генерация JWT токена
-func GenerateToken(username string) (string, error) {
+func GenerateToken(username, device, ip string) (string, error) {
 	expirationTime := time.Now().Add(time.Duration(jwtExpirationMinutes) * time.Minute)
 	claims := &Claims{
 		Username: username,
+		Device:   device,
+		IP:       ip,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			Issuer:    jwtIssuer,
@@ -48,10 +52,26 @@ func ValidateToken(tokenString string) (*Claims, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		var storedToken Token
+		err := TokenCollection.FindOne(context.TODO(), bson.M{"token": tokenString}).Decode(&storedToken)
+		if err == nil && storedToken.Revoked {
+			return nil, errors.New("token has been revoked")
+		}
 		return claims, nil
 	}
 	return nil, errors.New("invalid token")
+}
+
+// RevokeToken - отзыв токена
+func RevokeToken(tokenString string) error {
+	_, err := TokenCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"token": tokenString},
+		bson.M{"$set": bson.M{"revoked": true}},
+	)
+	return err
 }
 
 // RegisterHandler - регистрация нового пользователя
@@ -67,7 +87,6 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	// Проверяем, существует ли пользователь
 	var existingUser User
 	err := UserCollection.FindOne(context.TODO(), bson.M{"username": req.Username}).Decode(&existingUser)
 	if err == nil {
@@ -75,14 +94,12 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	// Хешируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
 		return
 	}
 
-	// Создаём нового пользователя
 	newUser := User{
 		ID:        primitive.NewObjectID(),
 		Username:  req.Username,
@@ -112,7 +129,6 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Поиск пользователя в базе
 	var user User
 	err := UserCollection.FindOne(context.TODO(), bson.M{"username": req.Username}).Decode(&user)
 	if err != nil {
@@ -120,25 +136,28 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Проверка пароля
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
-	// Генерация токена
-	token, err := GenerateToken(user.Username)
+	device := c.Request.Header.Get("User-Agent")
+	ip := c.ClientIP()
+
+	token, err := GenerateToken(user.Username, device, ip)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
 	}
 
-	// Сохранение токена в MongoDB
 	_, err = TokenCollection.InsertOne(context.TODO(), Token{
 		ID:        primitive.NewObjectID(),
 		Username:  user.Username,
 		Token:     token,
+		Device:    device,
+		IP:        ip,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
+		Revoked:   false,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not store token"})
@@ -148,13 +167,33 @@ func LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
+// LogoutHandler удаляет Refresh Token из базы и cookie
+func LogoutHandler(c *gin.Context) {
+	cookie, err := c.Cookie("refresh_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No refresh token found"})
+		return
+	}
+
+	// Удаление Refresh Token из базы (реализуйте логику)
+	if err := deleteRefreshTokenFromDB(cookie); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke session"})
+		return
+	}
+
+	// Очистка cookie на клиенте
+	c.SetCookie("refresh_token", "", -1, "/", "localhost", false, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+}
+
 // AuthMiddleware - Middleware для проверки JWT-токена
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
 
 		if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Токен отсутствует или некорректный"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
 			c.Abort()
 			return
 		}
@@ -162,17 +201,60 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 		claims, err := ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Невалидный токен"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
 
-		if claims.Issuer != jwtIssuer {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный издатель токена"})
-			c.Abort()
-			return
-		}
+		// Сохранение данных токена в контексте запроса
+		c.Set("username", claims.Username)
+		c.Set("device", claims.Device)
+		c.Set("ip", claims.IP)
 
 		c.Next()
 	}
+}
+
+// RevokeTokenHandler - обработчик отзыва токена
+func RevokeTokenHandler(c *gin.Context) {
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" || !strings.HasPrefix(tokenString, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Токен отсутствует или некорректный"})
+		return
+	}
+
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+	// Проверяем, существует ли токен
+	var existingToken Token
+	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": tokenString}).Decode(&existingToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Токен не найден"})
+		return
+	}
+
+	if existingToken.Revoked {
+		c.JSON(http.StatusConflict, gin.H{"error": "Токен уже отозван"})
+		return
+	}
+
+	// Обновляем токен, помечая его как отозванный
+	_, err = TokenCollection.UpdateOne(
+		context.TODO(),
+		bson.M{"token": tokenString},
+		bson.M{"$set": bson.M{"revoked": true}},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при отзыве токена"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Токен отозван"})
+}
+
+// deleteRefreshTokenFromDB - удаляет Refresh Token из базы данных
+func deleteRefreshTokenFromDB(token string) error {
+	// Предположим, что TokenCollection - это ваша коллекция в MongoDB для хранения токенов
+	_, err := TokenCollection.DeleteOne(context.TODO(), bson.M{"token": token})
+	return err
 }
