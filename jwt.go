@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,9 +17,25 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
-var jwtIssuer = os.Getenv("JWT_ISSUER")
-var jwtExpirationMinutes, _ = strconv.Atoi(os.Getenv("JWT_EXPIRATION_MINUTES"))
+var (
+	jwtSecret            []byte
+	jwtIssuer            string
+	jwtExpirationMinutes int
+)
+
+func init() {
+	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+	jwtIssuer = os.Getenv("JWT_ISSUER")
+	var err error
+	jwtExpirationMinutes, err = strconv.Atoi(os.Getenv("JWT_EXPIRATION_MINUTES"))
+	if err != nil {
+		log.Fatal("Invalid JWT_EXPIRATION_MINUTES value")
+	}
+
+	if len(jwtSecret) == 0 {
+		log.Fatal("JWT_SECRET is not set")
+	}
+}
 
 // Claims - структура для хранения данных в токене
 type Claims struct {
@@ -199,9 +216,26 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+		// Проверяем валидность JWT
 		claims, err := ValidateToken(tokenString)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		// Проверяем, есть ли токен в базе и не был ли он отозван
+		var storedToken Token
+		err = TokenCollection.FindOne(context.TODO(), bson.M{"token": tokenString}).Decode(&storedToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token not found"})
+			c.Abort()
+			return
+		}
+
+		if storedToken.Revoked {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
 			c.Abort()
 			return
 		}
