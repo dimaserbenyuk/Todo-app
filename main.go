@@ -63,6 +63,7 @@ func main() {
 		auth.PUT("/tasks/:id", UpdateTask)
 		auth.DELETE("/tasks/:id", DeleteTask)
 		auth.POST("/revoke", RevokeTokenHandler)
+		auth.POST("/refresh", RefreshTokenHandler)
 	}
 
 	// Swagger документация

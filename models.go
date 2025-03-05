@@ -90,4 +90,5 @@ type Token struct {
 	Device    string             `bson:"device,omitempty" json:"device,omitempty"`
 	IP        string             `bson:"ip,omitempty" json:"ip,omitempty"`
 	Revoked   bool               `bson:"revoked" json:"revoked"`
+	TokenType string             `bson:"token_type" json:"token_type"` // "access" or "refresh"
 }
