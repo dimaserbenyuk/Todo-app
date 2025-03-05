@@ -190,6 +190,7 @@ func LoginHandler(c *gin.Context) {
 		IP:        ip,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		Revoked:   false,
+		TokenType: "access",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not store access token"})
@@ -204,6 +205,7 @@ func LoginHandler(c *gin.Context) {
 		IP:        ip,
 		ExpiresAt: refreshTokenExpiry,
 		Revoked:   false,
+		TokenType: "refresh",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not store refresh token"})
@@ -215,6 +217,8 @@ func LoginHandler(c *gin.Context) {
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
 	})
+	log.Println("Сохраняем Refresh Token:", refreshToken)
+
 }
 
 // LogoutHandler удаляет Refresh Token из базы и cookie
@@ -345,22 +349,48 @@ func RefreshTokenHandler(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
+	// Проверяем наличие токена в базе данных
 	var storedToken Token
 	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken}).Decode(&storedToken)
-	if err != nil || storedToken.Revoked {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked refresh token"})
+	if err != nil {
+		log.Println("Ошибка поиска refresh токена:", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
 		return
 	}
 
-	// Проверяем оставшееся время жизни Refresh Token
-	timeRemaining := time.Until(storedToken.ExpiresAt)
-	shouldRefreshToken := timeRemaining < (7 * 24 * time.Hour) // Меньше 7 дней
+	// Проверяем, был ли токен отозван
+	if storedToken.Revoked {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token has been revoked"})
+		return
+	}
 
-	newAccessToken, err := GenerateToken(storedToken.Username, storedToken.Device, storedToken.IP)
+	// Проверяем срок действия refresh токена
+	if time.Now().After(storedToken.ExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token expired"})
+		return
+	}
+
+	// Декодируем refresh token
+	token, err := jwt.ParseWithClaims(req.RefreshToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
+		return
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+		return
+	}
+
+	// Создаём новый Access Token
+	newAccessToken, err := GenerateToken(claims.Username, storedToken.Device, storedToken.IP)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
@@ -368,7 +398,9 @@ func RefreshTokenHandler(c *gin.Context) {
 
 	response := gin.H{"access_token": newAccessToken}
 
-	if shouldRefreshToken {
+	// Если до истечения Refresh Token осталось менее 7 дней, создаём новый Refresh Token
+	timeRemaining := time.Until(storedToken.ExpiresAt)
+	if timeRemaining < (7 * 24 * time.Hour) {
 		newRefreshToken, newExpiry, err := GenerateRefreshToken(storedToken.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
@@ -376,7 +408,7 @@ func RefreshTokenHandler(c *gin.Context) {
 		}
 		response["refresh_token"] = newRefreshToken
 
-		// Обновляем Refresh Token в базе
+		// Обновляем Refresh Token в базе данных
 		_, err = TokenCollection.UpdateOne(
 			context.TODO(),
 			bson.M{"token": req.RefreshToken},
