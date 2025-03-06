@@ -27,8 +27,11 @@ jobs:
     - name: swag
       run: |
         go install github.com/swaggo/swag/cmd/swag@latest
+    - name: init
+      run: |
         swag init --parseDependency --parseInternal
-
+        export JWT_SECRET=your_secret_key
+        export JWT_EXPIRATION_MINUTES=60
 
     - name: Test
       run: go test -v ./...
