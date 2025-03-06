@@ -20,9 +20,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var (
-	mongoClient *mongo.Client
-)
+var mongoClient *mongo.Client
 
 func setupMongoDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -49,12 +47,10 @@ func teardownMongoDB() {
 }
 
 func TestMain(m *testing.M) {
-	// Загружаем переменные из .env
 	if err := godotenv.Load(); err != nil {
 		log.Println("Не найден .env файл, используем переменные окружения")
 	}
 
-	// Читаем переменные окружения
 	jwtSecret = []byte(getEnv("JWT_SECRET", "testsecret"))
 	jwtIssuer = getEnv("JWT_ISSUER", "testissuer")
 	jwtExpirationMinutes, _ = strconv.Atoi(getEnv("JWT_EXPIRATION_MINUTES", "10"))
@@ -65,7 +61,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// Вспомогательная функция для загрузки переменной окружения с fallback'ом
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
@@ -74,7 +69,7 @@ func getEnv(key, fallback string) string {
 }
 
 func TestGenerateToken(t *testing.T) {
-	token, err := GenerateToken("testuser", "testdevice", "127.0.0.1")
+	token, err := GenerateToken("testuser", RoleUser, "testdevice", "127.0.0.1")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
 }
@@ -84,14 +79,16 @@ func TestValidateToken(t *testing.T) {
 	jwtExpirationMinutes = 10
 	defer func() { jwtExpirationMinutes = originalExpiration }()
 
-	token, err := GenerateToken("testuser", "testdevice", "127.0.0.1")
+	token, err := GenerateToken("testuser", RoleUser, "testdevice", "127.0.0.1")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
 
 	claims, err := ValidateToken(token)
 	assert.NoError(t, err)
 	assert.Equal(t, "testuser", claims.Username)
+	assert.Equal(t, RoleUser, claims.Role)
 }
+
 func TestRegisterHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.Default()
@@ -118,6 +115,7 @@ func TestLoginHandler(t *testing.T) {
 	_, err := UserCollection.InsertOne(context.TODO(), User{
 		Username:  "existinguser",
 		Password:  string(hashedPassword),
+		Role:      RoleUser,
 		CreatedAt: time.Now(),
 	})
 	assert.NoError(t, err)

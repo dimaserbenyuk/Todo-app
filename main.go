@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	_ "github.com/dmytroserbeniuk/todo-backend/docs" // Подключение swagger документации
+	_ "github.com/dmytroserbeniuk/todo-backend/docs"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -42,26 +42,39 @@ func main() {
 
 	// Кастомная настройка CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://example.com", "http://localhost:3000"}, // Список разрешённых источников
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},                // Разрешённые HTTP методы
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},     // Разрешённые заголовки
-		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},           // Заголовки, которые будут доступны на клиенте
-		AllowCredentials: true,                                                    // Разрешение на использование cookies или заголовков авторизации
+		AllowOrigins:     []string{"http://example.com", "http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},
+		AllowCredentials: true,
 	}))
 
 	// Открытые маршруты (не требуют токена)
-	r.POST("/api/v1/register", RegisterHandler) // ✅ Открытая регистрация
-	r.POST("/api/v1/login", LoginHandler)       // ✅ Открытый вход
-	r.POST("/api/v1/logout", LogoutHandler)     // ✅ Выход, удаление Refresh Token
+	r.POST("/api/v1/register", RegisterHandler)
+	r.POST("/api/v1/login", LoginHandler)
+	r.POST("/api/v1/logout", LogoutHandler)
 
 	// Защищённые маршруты (требуют токен)
 	auth := r.Group("/api/v1")
 	auth.Use(AuthMiddleware())
 	{
-		auth.GET("/tasks", GetTasks)
-		auth.POST("/tasks", CreateTask)
-		auth.PUT("/tasks/:id", UpdateTask)
-		auth.DELETE("/tasks/:id", DeleteTask)
+		// Admin и Manager имеют доступ ко всем задачам
+		auth.GET("/tasks", RoleMiddleware(RoleAdmin, RoleManager), GetTasks)
+		auth.POST("/tasks", RoleMiddleware(RoleAdmin, RoleManager), CreateTask)
+		auth.PUT("/tasks/:id", RoleMiddleware(RoleAdmin, RoleManager), UpdateTask)
+
+		// User работает только со своими задачами
+		auth.GET("/user/tasks", RoleMiddleware(RoleUser), GetUserTasks)
+		auth.POST("/user/tasks", RoleMiddleware(RoleUser), CreateUserTask)
+		auth.PUT("/user/tasks/:id", RoleMiddleware(RoleUser), UpdateUserTask)
+
+		// Удаление задач только для Admin
+		auth.DELETE("/tasks/:id", RoleMiddleware(RoleAdmin), DeleteTask)
+
+		// Управление ролями (только Admin)
+		auth.PUT("/user/role", RoleMiddleware(RoleAdmin), ChangeUserRole)
+
+		// Обработка токенов
 		auth.POST("/revoke", RevokeTokenHandler)
 		auth.POST("/refresh", RefreshTokenHandler)
 	}

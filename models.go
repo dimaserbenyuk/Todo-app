@@ -11,48 +11,18 @@ import (
 // @Tags Tasks
 // @Produce json
 type Task struct {
-	// ID - Уникальный идентификатор задачи
-	// @example 60d5f8f6e4b0b3a520bdbb9b
-	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Title       string             `bson:"title" json:"title"`
+	Description string             `bson:"description,omitempty" json:"description,omitempty"`
+	Completed   bool               `bson:"completed" json:"completed"`
+	Priority    int                `bson:"priority,omitempty" json:"priority,omitempty"`
+	DueDate     time.Time          `bson:"due_date,omitempty" json:"due_date,omitempty"`
+	CreatedAt   time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt   time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	Status      string             `bson:"status,omitempty" json:"status,omitempty"`
+	Tags        []string           `bson:"tags,omitempty" json:"tags,omitempty"`
 
-	// Title - Название задачи
-	// @example "Закупить продукты"
-	Title string `bson:"title" json:"title"`
-
-	// Description - Описание задачи
-	// @example "Купить молоко, хлеб и фрукты"
-	Description string `bson:"description,omitempty" json:"description,omitempty"`
-
-	// Completed - Статус выполнения задачи
-	// @example false
-	Completed bool `bson:"completed" json:"completed"`
-
-	// Priority - Приоритет задачи (1 - низкий, 2 - средний, 3 - высокий)
-	// @example 2
-	Priority int `bson:"priority,omitempty" json:"priority,omitempty"`
-
-	// DueDate - Дата и время выполнения задачи (ISO 8601)
-	// @example "2025-03-05T12:00:00Z"
-	DueDate time.Time `bson:"due_date,omitempty" json:"due_date,omitempty"`
-
-	// CreatedAt - Дата создания задачи
-	// @example "2025-03-01T10:00:00Z"
-	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
-
-	// UpdatedAt - Дата последнего обновления задачи
-	// @example "2025-03-01T10:30:00Z"
-	UpdatedAt time.Time `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-
-	// Status - Статус задачи (pending, in_progress, done)
-	// @example "in_progress"
-	Status string `bson:"status,omitempty" json:"status,omitempty"`
-
-	// Tags - Теги задачи
-	// @example ["work", "urgent"]
-	Tags []string `bson:"tags,omitempty" json:"tags,omitempty"`
-
-	// Assignee - Исполнитель задачи
-	// @example "Иван Петров"
+	// Поле для связи с пользователем
 	Assignee string `bson:"assignee,omitempty" json:"assignee,omitempty"`
 }
 
@@ -76,6 +46,8 @@ type User struct {
 	// CreatedAt - Дата регистрации пользователя
 	// @example "2025-03-01T10:00:00Z"
 	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
+
+	Role string `bson:"role" json:"role"`
 }
 
 // Token - структура для хранения JWT-токена

@@ -45,16 +45,18 @@ func init() {
 // Claims - структура для хранения данных в токене
 type Claims struct {
 	Username string `json:"username"`
+	Role     string `json:"role"`
 	Device   string `json:"device,omitempty"`
 	IP       string `json:"ip,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken - генерация JWT токена
-func GenerateToken(username, device, ip string) (string, error) {
+func GenerateToken(username, role, device, ip string) (string, error) {
 	expirationTime := time.Now().Add(time.Duration(jwtExpirationMinutes) * time.Minute)
 	claims := &Claims{
 		Username: username,
+		Role:     role,
 		Device:   device,
 		IP:       ip,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -126,6 +128,7 @@ func RegisterHandler(c *gin.Context) {
 		ID:        primitive.NewObjectID(),
 		Username:  req.Username,
 		Password:  string(hashedPassword),
+		Role:      RoleUser,
 		CreatedAt: time.Now(),
 	}
 
@@ -168,7 +171,7 @@ func LoginHandler(c *gin.Context) {
 	ip := c.ClientIP()
 
 	// Генерация Access Token
-	accessToken, err := GenerateToken(user.Username, device, ip)
+	accessToken, err := GenerateToken(user.Username, user.Role, device, ip)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate access token"})
 		return
@@ -353,7 +356,7 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	// Проверяем наличие токена в базе данных
+	// Ищем refresh token в БД
 	var storedToken Token
 	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken}).Decode(&storedToken)
 	if err != nil {
@@ -374,7 +377,7 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	// Декодируем refresh token
+	// Декодируем refresh token для получения username
 	token, err := jwt.ParseWithClaims(req.RefreshToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtSecret, nil
 	})
@@ -389,8 +392,16 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	// Создаём новый Access Token
-	newAccessToken, err := GenerateToken(claims.Username, storedToken.Device, storedToken.IP)
+	// Получаем роль пользователя из базы данных
+	var user User
+	err = UserCollection.FindOne(context.TODO(), bson.M{"username": claims.Username}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Создаём новый Access Token (берём актуальную роль из БД)
+	newAccessToken, err := GenerateToken(user.Username, user.Role, storedToken.Device, storedToken.IP)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
@@ -401,7 +412,7 @@ func RefreshTokenHandler(c *gin.Context) {
 	// Если до истечения Refresh Token осталось менее 7 дней, создаём новый Refresh Token
 	timeRemaining := time.Until(storedToken.ExpiresAt)
 	if timeRemaining < (7 * 24 * time.Hour) {
-		newRefreshToken, newExpiry, err := GenerateRefreshToken(storedToken.Username)
+		newRefreshToken, newExpiry, err := GenerateRefreshToken(user.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
 			return

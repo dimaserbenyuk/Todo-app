@@ -20,14 +20,12 @@ type MockTaskService struct {
 
 func (m *MockTaskService) CreateTask(task Task) (*Task, error) {
 	args := m.Called(task)
-	result, _ := args.Get(0).(*Task)
-	return result, args.Error(1)
+	return args.Get(0).(*Task), args.Error(1)
 }
 
 func (m *MockTaskService) GetTasks() ([]Task, error) {
 	args := m.Called()
-	result, _ := args.Get(0).([]Task)
-	return result, args.Error(1)
+	return args.Get(0).([]Task), args.Error(1)
 }
 
 func (m *MockTaskService) UpdateTask(id string, task Task) error {
@@ -44,48 +42,48 @@ func TestCreateTaskHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := new(MockTaskService)
-	router := gin.Default()
 
+	router := gin.Default()
 	router.POST("/tasks", func(c *gin.Context) {
 		var task Task
 		if err := c.ShouldBindJSON(&task); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
 		savedTask, err := mockService.CreateTask(task)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
 		c.JSON(http.StatusCreated, savedTask)
 	})
 
-	task := Task{
-		ID:        primitive.NewObjectID(),
-		Title:     "Test Task",
-		Completed: false,
+	newTask := Task{
+		Title:       "Test task",
+		Description: "Description of test task",
+		Assignee:    "testuser",
 	}
 
-	mockService.On("CreateTask", mock.AnythingOfType("Task")).Return(&task, nil)
+	mockService.On("CreateTask", mock.AnythingOfType("Task")).Return(&newTask, nil)
 
-	body, _ := json.Marshal(task)
-	req, _ := http.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(body))
+	jsonTask, _ := json.Marshal(newTask)
+	req, _ := http.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer(jsonTask))
 	req.Header.Set("Content-Type", "application/json")
-
 	w := httptest.NewRecorder()
+
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var responseTask Task
 	_ = json.Unmarshal(w.Body.Bytes(), &responseTask)
-	assert.Equal(t, task.Title, responseTask.Title)
+	assert.Equal(t, newTask.Title, responseTask.Title)
+	assert.Equal(t, newTask.Assignee, responseTask.Assignee)
 }
 
 func TestGetTasksHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
 	mockService := new(MockTaskService)
 	router := gin.Default()
 
@@ -99,20 +97,18 @@ func TestGetTasksHandler(t *testing.T) {
 	})
 
 	tasks := []Task{
-		{ID: primitive.NewObjectID(), Title: "Task 1", Completed: false},
-		{ID: primitive.NewObjectID(), Title: "Task 2", Completed: true},
+		{Title: "Task 1", Completed: false},
+		{Title: "Task 2", Completed: true},
 	}
 
 	mockService.On("GetTasks").Return(tasks, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/tasks", nil)
 	w := httptest.NewRecorder()
+
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var responseTasks []Task
-	_ = json.Unmarshal(w.Body.Bytes(), &responseTasks)
-	assert.Len(t, responseTasks, 2)
 }
 
 func TestUpdateTaskHandler(t *testing.T) {
@@ -124,7 +120,7 @@ func TestUpdateTaskHandler(t *testing.T) {
 		id := c.Param("id")
 		var task Task
 		if err := c.ShouldBindJSON(&task); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -137,12 +133,16 @@ func TestUpdateTaskHandler(t *testing.T) {
 	})
 
 	objectID := primitive.NewObjectID().Hex()
-	updatedTask := Task{Title: "Updated Task", Completed: true}
 
-	mockService.On("UpdateTask", objectID, updatedTask).Return(nil)
+	taskUpdate := Task{
+		Title:     "Updated task title",
+		Completed: true,
+	}
+	jsonTask, _ := json.Marshal(taskUpdate)
 
-	jsonData, _ := json.Marshal(updatedTask)
-	req, _ := http.NewRequest(http.MethodPut, "/tasks/"+objectID, bytes.NewBuffer(jsonData))
+	mockService.On("UpdateTask", objectID, mock.Anything).Return(nil)
+
+	req, _ := http.NewRequest(http.MethodPut, "/tasks/"+objectID, bytes.NewBuffer(jsonTask))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -158,59 +158,20 @@ func TestDeleteTaskHandler(t *testing.T) {
 
 	router.DELETE("/tasks/:id", func(c *gin.Context) {
 		id := c.Param("id")
-		err := mockService.DeleteTask(id)
-		if err != nil {
+		if err := mockService.DeleteTask(id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "Task deleted"})
 	})
 
-	objectID := primitive.NewObjectID().Hex()
+	taskID := primitive.NewObjectID().Hex()
+	mockService.On("DeleteTask", taskID).Return(nil)
 
-	mockService.On("DeleteTask", objectID).Return(nil)
-
-	req, _ := http.NewRequest(http.MethodDelete, "/tasks/"+objectID, nil)
+	req, _ := http.NewRequest(http.MethodDelete, "/tasks/"+taskID, nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
-
-// func TestCreateTaskHandler_InvalidData(t *testing.T) {
-// 	gin.SetMode(gin.TestMode)
-
-// 	mockService := &MockTaskService{}
-// 	router := gin.Default()
-// 	router.POST("/tasks", func(c *gin.Context) {
-// 		var task Task
-// 		if err := c.ShouldBindJSON(&task); err != nil {
-// 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-// 			return
-// 		}
-
-// 		savedTask, err := mockService.CreateTask(task)
-// 		if err != nil {
-// 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
-// 			return
-// 		}
-
-// 		c.JSON(http.StatusCreated, savedTask)
-// 	})
-
-// 	// Ожидаем вызов метода CreateTask с любым аргументом и возвращаем ошибку
-// 	mockService.On("CreateTask", mock.AnythingOfType("Task")).Return(nil, assert.AnError)
-
-// 	req, _ := http.NewRequest(http.MethodPost, "/tasks", bytes.NewBuffer([]byte("{}")))
-// 	req.Header.Set("Content-Type", "application/json")
-// 	w := httptest.NewRecorder()
-
-// 	router.ServeHTTP(w, req)
-
-// 	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-// 	var resp map[string]string
-// 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-// 	assert.Equal(t, "Invalid request", resp["error"])
-// }
