@@ -178,7 +178,9 @@ func LoginHandler(c *gin.Context) {
 	}
 
 	// Генерация Refresh Token
-	refreshToken, refreshTokenExpiry, err := GenerateRefreshToken(user.Username)
+	// Генерация Refresh Token с ролью
+	refreshToken, refreshTokenExpiry, err := GenerateRefreshToken(user.Username, user.Role)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate refresh token"})
 		return
@@ -334,17 +336,43 @@ func deleteRefreshTokenFromDB(token string) error {
 }
 
 // GenerateRefreshToken - генерация Refresh Token
-func GenerateRefreshToken(username string) (string, time.Time, error) {
+func GenerateRefreshToken(username, role string) (string, time.Time, error) {
 	expirationTime := time.Now().Add(time.Duration(refreshTokenExpiry) * 24 * time.Hour)
-	claims := jwt.MapClaims{
-		"username": username,
-		"exp":      expirationTime.Unix(),
+	claims := &Claims{
+		Username: username,
+		Role:     role, // <- обязательно передай роль сюда
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Issuer:    jwtIssuer,
+		},
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtSecret)
-	return tokenString, expirationTime, err
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return tokenString, expirationTime, nil
 }
 
+func ValidateRefreshToken(refreshToken string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(refreshToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		return nil, errors.New("INVALID REFRESH TYPE")
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok {
+		return nil, errors.New("INVALID CLAIM TYPE")
+	}
+
+	return claims, nil
+}
+
+// RefreshTokenHandler - обработчик обновления токенов
 // RefreshTokenHandler - обработчик обновления токенов
 func RefreshTokenHandler(c *gin.Context) {
 	var req struct {
@@ -356,80 +384,30 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	// Ищем refresh token в БД
+	log.Println("Получен Refresh Token от клиента:", req.RefreshToken)
+
+	// Проверяем токен в базе
 	var storedToken Token
-	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken}).Decode(&storedToken)
+	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken, "revoked": false}).Decode(&storedToken)
 	if err != nil {
-		log.Println("Ошибка поиска refresh токена:", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
+		log.Println("Refresh токен не найден или отозван:", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked token"})
 		return
 	}
 
-	// Проверяем, был ли токен отозван
-	if storedToken.Revoked {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token has been revoked"})
-		return
-	}
-
-	// Проверяем срок действия refresh токена
-	if time.Now().After(storedToken.ExpiresAt) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token expired"})
-		return
-	}
-
-	// Декодируем refresh token для получения username
-	token, err := jwt.ParseWithClaims(req.RefreshToken, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-	if err != nil || !token.Valid {
+	// Валидируем токен
+	claims, err := ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
 		return
 	}
 
-	claims, ok := token.Claims.(*Claims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-		return
-	}
-
-	// Получаем роль пользователя из базы данных
-	var user User
-	err = UserCollection.FindOne(context.TODO(), bson.M{"username": claims.Username}).Decode(&user)
+	// Генерируем новый Access Token
+	newAccessToken, err := GenerateToken(claims.Username, claims.Role, storedToken.Device, storedToken.IP)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate access token"})
 		return
 	}
 
-	// Создаём новый Access Token (берём актуальную роль из БД)
-	newAccessToken, err := GenerateToken(user.Username, user.Role, storedToken.Device, storedToken.IP)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
-		return
-	}
-
-	response := gin.H{"access_token": newAccessToken}
-
-	// Если до истечения Refresh Token осталось менее 7 дней, создаём новый Refresh Token
-	timeRemaining := time.Until(storedToken.ExpiresAt)
-	if timeRemaining < (7 * 24 * time.Hour) {
-		newRefreshToken, newExpiry, err := GenerateRefreshToken(user.Username)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
-			return
-		}
-		response["refresh_token"] = newRefreshToken
-
-		// Обновляем Refresh Token в базе данных
-		_, err = TokenCollection.UpdateOne(
-			context.TODO(),
-			bson.M{"token": req.RefreshToken},
-			bson.M{"$set": bson.M{"token": newRefreshToken, "expires_at": newExpiry}},
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update refresh token"})
-			return
-		}
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{"access_token": newAccessToken})
 }
