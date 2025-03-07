@@ -160,7 +160,6 @@ func RegisterHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "role": role})
 }
 
-
 // LoginHandler - обработчик входа и генерации токена
 // LoginHandler - обработчик входа и генерации токена
 func LoginHandler(c *gin.Context) {
@@ -393,7 +392,6 @@ func ValidateRefreshToken(refreshToken string) (*Claims, error) {
 }
 
 // RefreshTokenHandler - обработчик обновления токенов
-// RefreshTokenHandler - обработчик обновления токенов
 func RefreshTokenHandler(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
@@ -404,20 +402,21 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	log.Println("Получен Refresh Token от клиента:", req.RefreshToken)
+	log.Println("🔄 Запрос на обновление токена, получен refresh:", req.RefreshToken)
 
 	// Проверяем токен в базе
 	var storedToken Token
 	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken, "revoked": false}).Decode(&storedToken)
 	if err != nil {
-		log.Println("Refresh токен не найден или отозван:", err)
+		log.Println("❌ Refresh токен не найден или отозван:", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked token"})
 		return
 	}
 
-	// Валидируем токен
+	// Валидируем refresh токен
 	claims, err := ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
+		log.Println("❌ Ошибка валидации Refresh Token:", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
 		return
 	}
@@ -425,9 +424,36 @@ func RefreshTokenHandler(c *gin.Context) {
 	// Генерируем новый Access Token
 	newAccessToken, err := GenerateToken(claims.Username, claims.Role, storedToken.Device, storedToken.IP)
 	if err != nil {
+		log.Println("❌ Ошибка генерации Access Token:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate access token"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"access_token": newAccessToken})
+	// Если у refresh token осталось меньше 7 дней, выдаем новый
+	timeRemaining := time.Until(storedToken.ExpiresAt)
+	response := gin.H{"access_token": newAccessToken}
+
+	if timeRemaining < (7 * 24 * time.Hour) {
+		newRefreshToken, newExpiry, err := GenerateRefreshToken(claims.Username, claims.Role)
+		if err != nil {
+			log.Println("❌ Ошибка генерации нового Refresh Token:", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+			return
+		}
+
+		log.Println("♻️ Обновление Refresh Token:", newRefreshToken)
+
+		_, err = TokenCollection.UpdateOne(context.TODO(),
+			bson.M{"token": req.RefreshToken},
+			bson.M{"$set": bson.M{"token": newRefreshToken, "expires_at": newExpiry}},
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update refresh token"})
+			return
+		}
+
+		response["refresh_token"] = newRefreshToken
+	}
+
+	c.JSON(http.StatusOK, response)
 }
