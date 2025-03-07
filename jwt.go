@@ -99,6 +99,7 @@ func RevokeToken(tokenString string) error {
 }
 
 // RegisterHandler - регистрация нового пользователя
+// RegisterHandler - регистрация нового пользователя
 func RegisterHandler(c *gin.Context) {
 	type RegisterRequest struct {
 		Username string `json:"username" binding:"required"`
@@ -111,35 +112,54 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
+	// Проверяем, существует ли хотя бы один пользователь в базе
+	count, err := UserCollection.CountDocuments(context.TODO(), bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	// Если пользователей нет - назначаем первого админом
+	role := RoleUser
+	if count == 0 {
+		role = RoleAdmin
+		log.Println("Первый пользователь зарегистрирован как ADMIN")
+	}
+
+	// Проверяем, существует ли пользователь с таким именем
 	var existingUser User
-	err := UserCollection.FindOne(context.TODO(), bson.M{"username": req.Username}).Decode(&existingUser)
+	err = UserCollection.FindOne(context.TODO(), bson.M{"username": req.Username}).Decode(&existingUser)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 		return
 	}
 
+	// Хэшируем пароль
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not hash password"})
 		return
 	}
 
+	// Создаем нового пользователя
 	newUser := User{
 		ID:        primitive.NewObjectID(),
 		Username:  req.Username,
 		Password:  string(hashedPassword),
-		Role:      RoleUser,
+		Role:      role,
 		CreatedAt: time.Now(),
 	}
 
+	// Сохраняем пользователя в базу
 	_, err = UserCollection.InsertOne(context.TODO(), newUser)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create user"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully"})
+	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "role": role})
 }
+
 
 // LoginHandler - обработчик входа и генерации токена
 // LoginHandler - обработчик входа и генерации токена
