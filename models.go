@@ -47,6 +47,7 @@ type User struct {
 	// @example "2025-03-01T10:00:00Z"
 	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
 
+	// Role - Роль пользователя (admin/user)
 	Role string `bson:"role" json:"role"`
 }
 
@@ -59,8 +60,6 @@ type Token struct {
 	Username  string             `bson:"username" json:"username"`
 	Token     string             `bson:"token" json:"token"`
 	ExpiresAt time.Time          `bson:"expires_at" json:"expires_at"`
-	Device    string             `bson:"device,omitempty" json:"device,omitempty"`
-	IP        string             `bson:"ip,omitempty" json:"ip,omitempty"`
 	Revoked   bool               `bson:"revoked" json:"revoked"`
 	TokenType string             `bson:"token_type" json:"token_type"` // "access" or "refresh"
 }

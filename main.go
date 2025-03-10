@@ -52,7 +52,7 @@ func main() {
 	// Открытые маршруты (не требуют токена)
 	r.POST("/api/v1/register", RegisterHandler)
 	r.POST("/api/v1/login", LoginHandler)
-	r.POST("/api/v1/logout", LogoutHandler)
+	// r.POST("/api/v1/logout", LogoutHandler)
 
 	// Защищённые маршруты (требуют токен)
 	auth := r.Group("/api/v1")
@@ -77,6 +77,8 @@ func main() {
 		// Обработка токенов
 		auth.POST("/revoke", RevokeTokenHandler)
 		auth.POST("/refresh", RefreshTokenHandler)
+		auth.GET("/me", MeHandler)          // ✅ Проверка авторизации
+		auth.POST("/logout", LogoutHandler) // ✅ Выход
 	}
 
 	// Swagger документация
