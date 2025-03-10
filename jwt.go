@@ -156,8 +156,7 @@ func RegisterHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "role": role})
 }
 
-// LoginHandler - обработчик входа и генерации токена
-// LoginHandler - обработчик входа и генерации токена
+// LoginHandler - обработчик входа и генерации токенов
 func LoginHandler(c *gin.Context) {
 	type LoginRequest struct {
 		Username string `json:"username" binding:"required"`
@@ -191,25 +190,43 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// ✅ Сохраняем токен в базе данных (MongoDB)
-	tokenDoc := Token{
-		ID:        primitive.NewObjectID(),
-		Username:  user.Username,
-		Token:     accessToken,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		Revoked:   false,
-		TokenType: "access",
-	}
-
-	_, err = TokenCollection.InsertOne(context.TODO(), tokenDoc)
+	// Генерация Refresh Token
+	refreshToken, refreshTokenExpiry, err := GenerateRefreshToken(user.Username, user.Role)
 	if err != nil {
-		log.Println("❌ Ошибка сохранения токена:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not store token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate refresh token"})
 		return
 	}
 
-	// ✅ Устанавливаем токен в cookie
+	// ✅ Сохраняем токены в базе данных (MongoDB)
+	tokenDocs := []interface{}{
+		Token{
+			ID:        primitive.NewObjectID(),
+			Username:  user.Username,
+			Token:     accessToken,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+			Revoked:   false,
+			TokenType: "access",
+		},
+		Token{
+			ID:        primitive.NewObjectID(),
+			Username:  user.Username,
+			Token:     refreshToken,
+			ExpiresAt: refreshTokenExpiry,
+			Revoked:   false,
+			TokenType: "refresh",
+		},
+	}
+
+	_, err = TokenCollection.InsertMany(context.TODO(), tokenDocs)
+	if err != nil {
+		log.Println("❌ Ошибка сохранения токенов:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not store tokens"})
+		return
+	}
+
+	// ✅ Устанавливаем токены в cookie
 	c.SetCookie("token", accessToken, 60*60*24, "/", "localhost", false, true)
+	c.SetCookie("refresh_token", refreshToken, 60*60*24*30, "/", "localhost", false, true)
 
 	// ✅ Возвращаем успешный ответ
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
@@ -217,20 +234,31 @@ func LoginHandler(c *gin.Context) {
 
 // LogoutHandler удаляет Refresh Token из базы и cookie
 func LogoutHandler(c *gin.Context) {
-	cookie, err := c.Cookie("refresh_token")
+	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "No refresh token found"})
 		return
 	}
 
-	// Удаление Refresh Token из базы (реализуйте логику)
-	if err := deleteRefreshTokenFromDB(cookie); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke session"})
+	// ✅ 1️⃣ Удаляем `refresh_token` из базы
+	if err := deleteRefreshTokenFromDB(refreshToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke refresh token"})
 		return
 	}
 
-	// Очистка cookie на клиенте
+	// ✅ 2️⃣ Отзываем `access_token` (если он есть в заголовке)
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+		err := RevokeToken(accessToken)
+		if err != nil {
+			log.Println("Ошибка отзыва access_token:", err)
+		}
+	}
+
+	// ✅ 3️⃣ Очищаем куки у клиента
 	c.SetCookie("token", "", -1, "/", "localhost", false, true)
+	c.SetCookie("refresh_token", "", -1, "/", "localhost", false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
