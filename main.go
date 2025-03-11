@@ -27,7 +27,6 @@ import (
 
 // @schemes http
 func main() {
-
 	// Загружаем .env файл, если он существует
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -42,7 +41,7 @@ func main() {
 
 	// Кастомная настройка CORS
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://example.com", "http://localhost:3000"},
+		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length", "X-Custom-Header"},
@@ -52,7 +51,6 @@ func main() {
 	// Открытые маршруты (не требуют токена)
 	r.POST("/api/v1/register", RegisterHandler)
 	r.POST("/api/v1/login", LoginHandler)
-	r.POST("/api/v1/logout", LogoutHandler)
 
 	// Защищённые маршруты (требуют токен)
 	auth := r.Group("/api/v1")
@@ -71,12 +69,16 @@ func main() {
 		// Удаление задач только для Admin
 		auth.DELETE("/tasks/:id", RoleMiddleware(RoleAdmin), DeleteTask)
 
-		// Управление ролями (только Admin)
-		auth.PUT("/user/role", RoleMiddleware(RoleAdmin), ChangeUserRole)
+		// Управление пользователями (только Admin)
+		auth.GET("/users", RoleMiddleware(RoleAdmin), GetUsers)
+		auth.PUT("/users/role", RoleMiddleware(RoleAdmin), ChangeUserRole)
+		auth.DELETE("/users/:id", RoleMiddleware(RoleAdmin), DeleteUser)
 
 		// Обработка токенов
 		auth.POST("/revoke", RevokeTokenHandler)
 		auth.POST("/refresh", RefreshTokenHandler)
+		auth.GET("/me", MeHandler)          // ✅ Проверка авторизации
+		auth.POST("/logout", LogoutHandler) // ✅ Выход
 	}
 
 	// Swagger документация

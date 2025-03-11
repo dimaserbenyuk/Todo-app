@@ -30,24 +30,13 @@ type Task struct {
 // @Description Структура для хранения данных о пользователе
 // @Tags Users
 // @Produce json
+// User - структура пользователя в MongoDB
 type User struct {
-	// ID - Уникальный идентификатор пользователя
-	// @example 60d5f8f6e4b0b3a520bdbb9c
-	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-
-	// Username - Имя пользователя
-	// @example "ivan_petrov"
-	Username string `bson:"username" json:"username"`
-
-	// Password - Хэш пароля пользователя
-	// @example "hashed_password"
-	Password string `bson:"password" json:"-"`
-
-	// CreatedAt - Дата регистрации пользователя
-	// @example "2025-03-01T10:00:00Z"
-	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
-
-	Role string `bson:"role" json:"role"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username  string             `bson:"username" json:"username"`
+	Password  string             `bson:"password" json:"-"`
+	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	Roles     []string           `bson:"roles" json:"roles"` // теперь массив ролей
 }
 
 // Token - структура для хранения JWT-токена
@@ -59,8 +48,6 @@ type Token struct {
 	Username  string             `bson:"username" json:"username"`
 	Token     string             `bson:"token" json:"token"`
 	ExpiresAt time.Time          `bson:"expires_at" json:"expires_at"`
-	Device    string             `bson:"device,omitempty" json:"device,omitempty"`
-	IP        string             `bson:"ip,omitempty" json:"ip,omitempty"`
 	Revoked   bool               `bson:"revoked" json:"revoked"`
 	TokenType string             `bson:"token_type" json:"token_type"` // "access" or "refresh"
 }
