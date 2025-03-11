@@ -30,25 +30,13 @@ type Task struct {
 // @Description Структура для хранения данных о пользователе
 // @Tags Users
 // @Produce json
+// User - структура пользователя в MongoDB
 type User struct {
-	// ID - Уникальный идентификатор пользователя
-	// @example 60d5f8f6e4b0b3a520bdbb9c
-	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-
-	// Username - Имя пользователя
-	// @example "ivan_petrov"
-	Username string `bson:"username" json:"username"`
-
-	// Password - Хэш пароля пользователя
-	// @example "hashed_password"
-	Password string `bson:"password" json:"-"`
-
-	// CreatedAt - Дата регистрации пользователя
-	// @example "2025-03-01T10:00:00Z"
-	CreatedAt time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
-
-	// Role - Роль пользователя (admin/user)
-	Role string `bson:"role" json:"role"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username  string             `bson:"username" json:"username"`
+	Password  string             `bson:"password" json:"-"`
+	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	Roles     []string           `bson:"roles" json:"roles"` // теперь массив ролей
 }
 
 // Token - структура для хранения JWT-токена

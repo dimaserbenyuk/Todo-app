@@ -170,10 +170,13 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 			return
 		}
 
+		// Проверяем, есть ли хотя бы одна роль из списка
 		for _, role := range allowedRoles {
-			if user.Role == role {
-				c.Next()
-				return
+			for _, userRole := range user.Roles {
+				if role == userRole {
+					c.Next()
+					return
+				}
 			}
 		}
 
@@ -183,32 +186,35 @@ func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 
 func ChangeUserRole(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
-		Role     string `json:"role"`
+		Username string   `json:"username" binding:"required"`
+		Roles    []string `json:"roles" binding:"required"`
 	}
 
-	if err := c.BindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.Role != RoleAdmin && req.Role != RoleManager && req.Role != RoleUser {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
+	// Проверяем, есть ли такой пользователь
+	var user User
+	err := UserCollection.FindOne(context.TODO(), bson.M{"username": req.Username}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	_, err := UserCollection.UpdateOne(
+	// Обновляем роли в MongoDB
+	_, err = UserCollection.UpdateOne(
 		context.TODO(),
 		bson.M{"username": req.Username},
-		bson.M{"$set": bson.M{"role": req.Role}},
+		bson.M{"$set": bson.M{"roles": req.Roles}},
 	)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось изменить роль"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update roles"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Роль обновлена"})
+	c.JSON(http.StatusOK, gin.H{"message": "Roles updated successfully"})
 }
 
 // GetUserTasks - получает задачи, принадлежащие текущему пользователю
@@ -290,4 +296,37 @@ func UpdateUserTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Задача обновлена"})
+}
+
+func DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	_, err = UserCollection.DeleteOne(context.Background(), bson.M{"_id": objectID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
+
+func GetUsers(c *gin.Context) {
+	cursor, err := UserCollection.Find(context.Background(), bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	var users []User
+	if err = cursor.All(context.Background(), &users); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse users"})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
 }

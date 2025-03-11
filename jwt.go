@@ -116,9 +116,9 @@ func RegisterHandler(c *gin.Context) {
 	}
 
 	// Если пользователей нет - назначаем первого админом
-	role := RoleUser
+	roles := []string{RoleUser}
 	if count == 0 {
-		role = RoleAdmin
+		roles = []string{RoleAdmin}
 		log.Println("Первый пользователь зарегистрирован как ADMIN")
 	}
 
@@ -142,7 +142,7 @@ func RegisterHandler(c *gin.Context) {
 		ID:        primitive.NewObjectID(),
 		Username:  req.Username,
 		Password:  string(hashedPassword),
-		Role:      role,
+		Roles:     roles, // 👈 Записываем массив ролей
 		CreatedAt: time.Now(),
 	}
 
@@ -153,7 +153,7 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "role": role})
+	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully", "roles": roles})
 }
 
 // LoginHandler - обработчик входа и генерации токенов
@@ -183,15 +183,21 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	// Берем первую роль пользователя (по умолчанию)
+	userRole := RoleUser
+	if len(user.Roles) > 0 {
+		userRole = user.Roles[0] // 👈 Берем первую роль из списка
+	}
+
 	// Генерация Access Token
-	accessToken, err := GenerateToken(user.Username, user.Role)
+	accessToken, err := GenerateToken(user.Username, userRole)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate access token"})
 		return
 	}
 
 	// Генерация Refresh Token
-	refreshToken, refreshTokenExpiry, err := GenerateRefreshToken(user.Username, user.Role)
+	refreshToken, refreshTokenExpiry, err := GenerateRefreshToken(user.Username, userRole)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate refresh token"})
 		return
