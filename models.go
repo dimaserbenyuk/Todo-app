@@ -37,6 +37,7 @@ type User struct {
 	Password  string             `bson:"password" json:"-"`
 	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	Roles     []string           `bson:"roles" json:"roles"` // теперь массив ролей
+	Email     string             `bson:"email,omitempty" json:"email,omitempty"`
 }
 
 // Token - структура для хранения JWT-токена

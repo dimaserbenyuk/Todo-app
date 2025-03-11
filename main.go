@@ -79,6 +79,9 @@ func main() {
 		auth.POST("/refresh", RefreshTokenHandler)
 		auth.GET("/me", MeHandler)          // ✅ Проверка авторизации
 		auth.POST("/logout", LogoutHandler) // ✅ Выход
+
+		auth.GET("/profile", ProfileHandler)
+
 	}
 
 	// Swagger документация
