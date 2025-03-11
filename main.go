@@ -79,6 +79,15 @@ func main() {
 		auth.POST("/refresh", RefreshTokenHandler)
 		auth.GET("/me", MeHandler)          // ✅ Проверка авторизации
 		auth.POST("/logout", LogoutHandler) // ✅ Выход
+
+		auth.GET("/profile", ProfileHandler)
+
+		auth.POST("/token/generate_api", GenerateApiTokenHandler)
+		auth.GET("/token", GetUserTokenHandler)
+		// auth.GET("token", GetUserTokenHandler)
+		// auth.POST("token/generate", GenerateUserTokenHandler)
+		// auth.POST("token/revoke", RevokeUserTokenHandler)
+
 	}
 
 	// Swagger документация
