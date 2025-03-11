@@ -455,32 +455,82 @@ func RefreshTokenHandler(c *gin.Context) {
 		return
 	}
 
-	// Проверяем токен в базе
+	// Проверяем refresh-токен в базе
 	var storedToken Token
-	err := TokenCollection.FindOne(context.TODO(), bson.M{"token": req.RefreshToken, "revoked": false}).Decode(&storedToken)
+	err := TokenCollection.FindOne(context.TODO(), bson.M{
+		"token":      req.RefreshToken,
+		"revoked":    false,
+		"token_type": "refresh",
+	}).Decode(&storedToken)
+
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked refresh token"})
 		return
 	}
 
-	// Валидируем refresh токен
-	claims, err := ValidateToken(req.RefreshToken)
+	// Валидируем refresh-токен как JWT
+	claims, err := ValidateRefreshToken(req.RefreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
 		return
 	}
 
-	// Генерируем новый Access Token
-	newAccessToken, err := GenerateToken(claims.Username, claims.Role)
+	username := claims.Username
+	role := claims.Role
+
+	// Генерируем новый access-токен
+	newAccessToken, err := GenerateToken(username, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate access token"})
 		return
 	}
 
-	// ✅ Сохраняем новый Access Token в cookie
-	c.SetCookie("token", newAccessToken, 60*60*24, "/", "localhost", false, true)
+	// Генерируем новый refresh-токен
+	newRefreshToken, refreshExpiry, err := GenerateRefreshToken(username, role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate refresh token"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Token refreshed successfully"})
+	// Удаляем старый refresh-токен из базы
+	_, err = TokenCollection.DeleteOne(context.TODO(), bson.M{"token": req.RefreshToken})
+	if err != nil {
+		log.Println("Ошибка удаления старого refresh-токена:", err)
+	}
+
+	// Сохраняем новые токены в базе
+	tokenDocs := []interface{}{
+		Token{
+			ID:        primitive.NewObjectID(),
+			Username:  username,
+			Token:     newAccessToken,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+			Revoked:   false,
+			TokenType: "access",
+		},
+		Token{
+			ID:        primitive.NewObjectID(),
+			Username:  username,
+			Token:     newRefreshToken,
+			ExpiresAt: refreshExpiry,
+			Revoked:   false,
+			TokenType: "refresh",
+		},
+	}
+
+	_, err = TokenCollection.InsertMany(context.TODO(), tokenDocs)
+	if err != nil {
+		log.Println("Ошибка сохранения новых токенов:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not store tokens"})
+		return
+	}
+
+	// Устанавливаем новые токены в куки
+	c.SetCookie("token", newAccessToken, 60*60*24, "/", "localhost", false, true)
+	c.SetCookie("refresh_token", newRefreshToken, 60*60*24*30, "/", "localhost", false, true)
+
+	// Возвращаем успешный ответ
+	c.JSON(http.StatusOK, gin.H{"message": "Tokens refreshed successfully"})
 }
 
 func MeHandler(c *gin.Context) {

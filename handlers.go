@@ -21,13 +21,22 @@ import (
 // @Failure 500 {object} gin.H "Ошибка сервера"
 // @Router /tasks [get]
 func GetTasks(c *gin.Context) {
-	username, exists := c.Get("username")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
+	// Берем роль из контекста (добавь в middleware установку роли в контекст)
+	role, _ := c.Get("role")
+
+	var filter bson.M
+	if role == RoleAdmin || role == RoleManager {
+		filter = bson.M{} // Admin и Manager видят все задачи
+	} else {
+		username, exists := c.Get("username")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		filter = bson.M{"assignee": username}
 	}
 
-	cursor, err := TaskCollection.Find(context.TODO(), bson.M{"assignee": username})
+	cursor, err := TaskCollection.Find(context.TODO(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения задач"})
 		return
