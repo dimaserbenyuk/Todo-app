@@ -542,3 +542,31 @@ func MeHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"username": username})
 }
+
+// Хендлер (например, в handlers.go)
+func GetUserTokenHandler(c *gin.Context) {
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var token Token
+	err := TokenCollection.FindOne(
+		context.TODO(),
+		bson.M{
+			"username":   username,
+			"token_type": "api",
+			"revoked":    false,
+		},
+	).Decode(&token)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No API token found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token": token.Token,
+	})
+}
