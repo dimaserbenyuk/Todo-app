@@ -1,18 +1,22 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	_ "github.com/dmytroserbeniuk/todo-backend/docs"
+	"github.com/dmytroserbeniuk/todo-backend/kafka"
+	"github.com/dmytroserbeniuk/todo-backend/logger"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 )
 
-// @title   API для управления задачами
-// @version  1.0
+// @title API для управления задачами
+// @version 1.0
 // @description API для управления задачами
 
 // @securityDefinitions.apikey BearerAuth
@@ -22,22 +26,57 @@ import (
 
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-// @host   localhost:8080
-// @BasePath  /api/v1/
+// @host localhost:8080
+// @BasePath /api/v1/
 
 // @schemes http
 func main() {
 	// Загружаем .env файл, если он существует
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Println("No .env file found, proceeding without it")
+		log.Println("⚠ No .env file found, proceeding without it")
 	}
 
 	// Инициализация базы данных
 	initDB()
 
+	// Настройка логгера с отправкой логов в Kafka
+	kafkaLogger, err := logger.NewKafkaLogger([]string{"kafka:9092"}, "gin-logs")
+	if err != nil {
+		log.Fatalf("❌ Ошибка инициализации Kafka Logger: %v", err)
+	}
+	defer kafkaLogger.Close()
+
+	log := logger.NewZapLogger(kafkaLogger)
+
+	// Создание Consumer Group
+	// Создание Consumer Group
+	consumerGroup, err := kafka.NewConsumerGroup([]string{"kafka:9092"}, "tasks", "todo-consumer-group", log)
+	if err != nil {
+		log.Fatal("❌ Ошибка при создании Consumer Group", zap.Error(err))
+	}
+	defer consumerGroup.Close()
+
+	// ✅ Запускаем Consumer Group в отдельной горутине
+	ctx := context.Background()
+	handler := &kafka.ConsumerHandler{Logger: log}
+	go func() {
+		consumerGroup.RegisterHandlerAndConsumeMessages(ctx, handler)
+	}()
+
 	// Создаём маршруты
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// Middleware для логирования запросов
+	r.Use(func(c *gin.Context) {
+		log.Info("Request",
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("client_ip", c.ClientIP()),
+		)
+		c.Next()
+	})
 
 	// Кастомная настройка CORS
 	r.Use(cors.New(cors.Config{
@@ -84,15 +123,13 @@ func main() {
 
 		auth.POST("/token/generate_api", GenerateApiTokenHandler)
 		auth.GET("/token", GetUserTokenHandler)
-		// auth.GET("token", GetUserTokenHandler)
-		// auth.POST("token/generate", GenerateUserTokenHandler)
-		// auth.POST("token/revoke", RevokeUserTokenHandler)
-
 	}
 
 	// Swagger документация
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Запуск сервера
-	r.Run(":8080")
+	// Запуск сервера с обработкой ошибок
+	if err := r.Run("0.0.0.0:8080"); err != nil {
+		log.Fatal("❌ Ошибка запуска сервера:", zap.Error(err))
+	}
 }
