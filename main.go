@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	_ "github.com/dmytroserbeniuk/todo-backend/docs"
 	"github.com/dmytroserbeniuk/todo-backend/kafka"
@@ -31,7 +32,10 @@ import (
 
 // @schemes http
 func main() {
-	// Загружаем .env файл, если он существует
+	// ✅ Глобальная переменная для логгера
+	var zapLog *zap.Logger
+
+	// Загружаем .env файл
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Println("⚠ No .env file found, proceeding without it")
@@ -40,42 +44,69 @@ func main() {
 	// Инициализация базы данных
 	initDB()
 
-	// Настройка логгера с отправкой логов в Kafka
+	// ✅ Настройка логгера с Kafka
 	kafkaLogger, err := logger.NewKafkaLogger([]string{"kafka:9092"}, "gin-logs")
 	if err != nil {
 		log.Fatalf("❌ Ошибка инициализации Kafka Logger: %v", err)
 	}
 	defer kafkaLogger.Close()
 
-	log := logger.NewZapLogger(kafkaLogger)
+	// ✅ Инициализация zap логгера
+	zapLog = logger.NewZapLogger(kafkaLogger)
 
-	// Создание Consumer Group
-	// Создание Consumer Group
-	consumerGroup, err := kafka.NewConsumerGroup([]string{"kafka:9092"}, "tasks", "todo-consumer-group", log)
+	// ✅ Передаем zapLog в handlers.go
+	InitLogger(zapLog)
+
+	// ✅ Создание Consumer Group
+	consumerGroup, err := kafka.NewConsumerGroup([]string{"kafka:9092"}, "tasks", "todo-consumer-group", zapLog)
 	if err != nil {
-		log.Fatal("❌ Ошибка при создании Consumer Group", zap.Error(err))
+		zapLog.Fatal("❌ Ошибка при создании Consumer Group", zap.Error(err))
 	}
 	defer consumerGroup.Close()
 
 	// ✅ Запускаем Consumer Group в отдельной горутине
 	ctx := context.Background()
-	handler := &kafka.ConsumerHandler{Logger: log}
+	handler := &kafka.ConsumerHandler{Logger: zapLog}
 	go func() {
+		zapLog.Info("🚀 Запуск Kafka Consumer Group")
 		consumerGroup.RegisterHandlerAndConsumeMessages(ctx, handler)
 	}()
 
-	// Создаём маршруты
+	// ✅ Запуск сервера
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	// Middleware для логирования запросов
+	// ✅ Middleware для обработки паники (чтобы сервер не падал)
 	r.Use(func(c *gin.Context) {
-		log.Info("Request",
-			zap.String("method", c.Request.Method),
-			zap.String("path", c.Request.URL.Path),
-			zap.String("client_ip", c.ClientIP()),
-		)
+		defer func() {
+			if err := recover(); err != nil {
+				zapLog.Error("🔥 Panic caught",
+					zap.Any("error", err),
+					zap.String("path", c.Request.URL.Path),
+					zap.String("method", c.Request.Method),
+					zap.String("client_ip", c.ClientIP()),
+				)
+				c.JSON(500, gin.H{"error": "Internal Server Error"})
+				c.Abort()
+			}
+		}()
 		c.Next()
+	})
+
+	// ✅ Middleware для детального логирования всех запросов
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		latency := time.Since(start)
+
+		LogRequest(zapLog,
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.ClientIP(),
+			c.Request.UserAgent(),
+			c.Writer.Status(),
+			latency,
+		)
 	})
 
 	// Кастомная настройка CORS
@@ -95,41 +126,46 @@ func main() {
 	auth := r.Group("/api/v1")
 	auth.Use(AuthMiddleware())
 	{
-		// Admin и Manager имеют доступ ко всем задачам
 		auth.GET("/tasks", RoleMiddleware(RoleAdmin, RoleManager), GetTasks)
 		auth.POST("/tasks", RoleMiddleware(RoleAdmin, RoleManager), CreateTask)
 		auth.PUT("/tasks/:id", RoleMiddleware(RoleAdmin, RoleManager), UpdateTask)
 
-		// User работает только со своими задачами
 		auth.GET("/user/tasks", RoleMiddleware(RoleUser), GetUserTasks)
 		auth.POST("/user/tasks", RoleMiddleware(RoleUser), CreateUserTask)
 		auth.PUT("/user/tasks/:id", RoleMiddleware(RoleUser), UpdateUserTask)
 
-		// Удаление задач только для Admin
 		auth.DELETE("/tasks/:id", RoleMiddleware(RoleAdmin), DeleteTask)
-
-		// Управление пользователями (только Admin)
 		auth.GET("/users", RoleMiddleware(RoleAdmin), GetUsers)
 		auth.PUT("/users/role", RoleMiddleware(RoleAdmin), ChangeUserRole)
 		auth.DELETE("/users/:id", RoleMiddleware(RoleAdmin), DeleteUser)
 
-		// Обработка токенов
 		auth.POST("/revoke", RevokeTokenHandler)
 		auth.POST("/refresh", RefreshTokenHandler)
-		auth.GET("/me", MeHandler)          // ✅ Проверка авторизации
-		auth.POST("/logout", LogoutHandler) // ✅ Выход
+		auth.GET("/me", MeHandler)
+		auth.POST("/logout", LogoutHandler)
 
 		auth.GET("/profile", ProfileHandler)
-
 		auth.POST("/token/generate_api", GenerateApiTokenHandler)
 		auth.GET("/token", GetUserTokenHandler)
 	}
 
-	// Swagger документация
+	// ✅ Swagger документация
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Запуск сервера с обработкой ошибок
+	// ✅ Запуск сервера с логированием ошибок
 	if err := r.Run("0.0.0.0:8080"); err != nil {
-		log.Fatal("❌ Ошибка запуска сервера:", zap.Error(err))
+		zapLog.Fatal("❌ Ошибка запуска сервера:", zap.Error(err))
 	}
+}
+
+// ✅ Функция логирования запросов
+func LogRequest(log *zap.Logger, method, path, ip, userAgent string, status int, latency time.Duration) {
+	log.Info("🌍 HTTP-запрос",
+		zap.String("method", method),
+		zap.String("path", path),
+		zap.String("client_ip", ip),
+		zap.String("user_agent", userAgent),
+		zap.Int("status", status),
+		zap.Duration("latency", latency),
+	)
 }
