@@ -4,8 +4,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      kafka:
-        condition: service_healthy  # ✅ Ждем, пока Kafka будет готова
+      # kafka:
+      #   condition: service_healthy  # ✅ Ждем, пока Kafka будет готова
       mongo:
         condition: service_started  # Mongo просто должен быть запущен
     environment:
@@ -26,51 +26,51 @@ services:
     networks:
       - todo-network
 
-  kafka:
-    image: bitnami/kafka:latest
-    container_name: kafka
-    environment:
-      - KAFKA_ENABLE_KRAFT=yes
-      - KAFKA_CFG_NODE_ID=1
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
-    ports:
-      - "9092:9092"
-    networks:
-      - todo-network
-    healthcheck:  # ✅ Добавляем проверку готовности Kafka
-      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # kafka:
+  #   image: bitnami/kafka:latest
+  #   container_name: kafka
+  #   environment:
+  #     - KAFKA_ENABLE_KRAFT=yes
+  #     - KAFKA_CFG_NODE_ID=1
+  #     - KAFKA_CFG_PROCESS_ROLES=controller,broker
+  #     - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+  #     - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+  #     - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+  #     - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+  #     - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+  #   ports:
+  #     - "9092:9092"
+  #   networks:
+  #     - todo-network
+  #   healthcheck:  # ✅ Добавляем проверку готовности Kafka
+  #     test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    depends_on:
-      - kafka
-    environment:
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
-    ports:
-      - "8081:8080"
-    networks:
-      - todo-network
+  # kafka-ui:
+  #   image: provectuslabs/kafka-ui:latest
+  #   container_name: kafka-ui
+  #   depends_on:
+  #     - kafka
+  #   environment:
+  #     - KAFKA_CLUSTERS_0_NAME=local
+  #     - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+  #   ports:
+  #     - "8081:8080"
+  #   networks:
+  #     - todo-network
 
-  grafana:
-    image: grafana/grafana:9.5.2
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    networks:
-      - todo-network
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SECURITY_ADMIN_USER=admin
+  # grafana:
+  #   image: grafana/grafana:9.5.2
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - todo-network
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #     - GF_SECURITY_ADMIN_USER=admin
 
 volumes:
   mongo_data:

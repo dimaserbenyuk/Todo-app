@@ -21,6 +21,15 @@ func InitLogger(logger *zap.Logger) {
 }
 
 // GetTasks - возвращает все задачи
+// @Summary Получить список задач
+// @Description Возвращает массив всех задач
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} Task "Список задач"
+// @Failure 500 {object} gin.H "Ошибка сервера"
+// @Router /tasks [get]
 func GetTasks(c *gin.Context) {
 	role, _ := c.Get("role")
 
@@ -56,6 +65,17 @@ func GetTasks(c *gin.Context) {
 }
 
 // CreateTask - создает новую задачу
+// @Summary Создать задачу
+// @Description Добавляет новую задачу в базу данных
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param task body Task true "Данные новой задачи"
+// @Success 201 {object} Task "Созданная задача"
+// @Failure 400 {object} gin.H "Некорректные данные"
+// @Failure 500 {object} gin.H "Ошибка сервера"
+// @Security BearerAuth
+// @Router /tasks [post]
 func CreateTask(c *gin.Context) {
 	// 🛠️ Обработчик паники (чтобы сервер не падал)
 	defer func() {
@@ -116,6 +136,18 @@ func CreateTask(c *gin.Context) {
 }
 
 // UpdateTask - обновляет задачу по ID
+// @Summary Обновить задачу
+// @Description Обновляет существующую задачу по её ID
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param id path string true "ID задачи"
+// @Param task body Task true "Обновленные данные задачи"
+// @Success 200 {object} gin.H "Сообщение об успешном обновлении"
+// @Failure 400 {object} gin.H "Некорректные данные"
+// @Failure 500 {object} gin.H "Ошибка сервера"
+// @Security BearerAuth
+// @Router /tasks/{id} [put]
 func UpdateTask(c *gin.Context) {
 	username, exists := c.Get("username")
 	if !exists {
@@ -155,6 +187,16 @@ func UpdateTask(c *gin.Context) {
 }
 
 // DeleteTask - удаляет задачу по ID
+// @Summary Удалить задачу
+// @Description Удаляет задачу по её ID
+// @Tags Tasks
+// @Accept json
+// @Produce json
+// @Param id path string true "ID задачи"
+// @Success 200 {object} gin.H "Сообщение об успешном удалении"
+// @Failure 500 {object} gin.H "Ошибка сервера"
+// @Security BearerAuth
+// @Router /tasks/{id} [delete]
 func DeleteTask(c *gin.Context) {
 	username, exists := c.Get("username")
 	if !exists {

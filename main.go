@@ -1,13 +1,9 @@
 package main
 
 import (
-	"context"
 	"log"
-	"time"
 
 	_ "github.com/dmytroserbeniuk/todo-backend/docs"
-	"github.com/dmytroserbeniuk/todo-backend/kafka"
-	"github.com/dmytroserbeniuk/todo-backend/logger"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -44,33 +40,33 @@ func main() {
 	// Инициализация базы данных
 	initDB()
 
-	// ✅ Настройка логгера с Kafka
-	kafkaLogger, err := logger.NewKafkaLogger([]string{"kafka:9092"}, "gin-logs")
-	if err != nil {
-		log.Fatalf("❌ Ошибка инициализации Kafka Logger: %v", err)
-	}
-	defer kafkaLogger.Close()
+	// // ✅ Настройка логгера с Kafka
+	// kafkaLogger, err := logger.NewKafkaLogger([]string{"kafka:9092"}, "gin-logs")
+	// if err != nil {
+	// 	log.Fatalf("❌ Ошибка инициализации Kafka Logger: %v", err)
+	// }
+	// defer kafkaLogger.Close()
 
-	// ✅ Инициализация zap логгера
-	zapLog = logger.NewZapLogger(kafkaLogger)
+	// // ✅ Инициализация zap логгера
+	// zapLog = logger.NewZapLogger(kafkaLogger)
 
-	// ✅ Передаем zapLog в handlers.go
-	InitLogger(zapLog)
+	// // ✅ Передаем zapLog в handlers.go
+	// InitLogger(zapLog)
 
-	// ✅ Создание Consumer Group
-	consumerGroup, err := kafka.NewConsumerGroup([]string{"kafka:9092"}, "tasks", "todo-consumer-group", zapLog)
-	if err != nil {
-		zapLog.Fatal("❌ Ошибка при создании Consumer Group", zap.Error(err))
-	}
-	defer consumerGroup.Close()
+	// // ✅ Создание Consumer Group
+	// consumerGroup, err := kafka.NewConsumerGroup([]string{"kafka:9092"}, "tasks", "todo-consumer-group", zapLog)
+	// if err != nil {
+	// 	zapLog.Fatal("❌ Ошибка при создании Consumer Group", zap.Error(err))
+	// }
+	// defer consumerGroup.Close()
 
-	// ✅ Запускаем Consumer Group в отдельной горутине
-	ctx := context.Background()
-	handler := &kafka.ConsumerHandler{Logger: zapLog}
-	go func() {
-		zapLog.Info("🚀 Запуск Kafka Consumer Group")
-		consumerGroup.RegisterHandlerAndConsumeMessages(ctx, handler)
-	}()
+	// // ✅ Запускаем Consumer Group в отдельной горутине
+	// ctx := context.Background()
+	// handler := &kafka.ConsumerHandler{Logger: zapLog}
+	// go func() {
+	// 	zapLog.Info("🚀 Запуск Kafka Consumer Group")
+	// 	consumerGroup.RegisterHandlerAndConsumeMessages(ctx, handler)
+	// }()
 
 	// ✅ Запуск сервера
 	r := gin.New()
@@ -94,20 +90,20 @@ func main() {
 	})
 
 	// ✅ Middleware для детального логирования всех запросов
-	r.Use(func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-		latency := time.Since(start)
+	// r.Use(func(c *gin.Context) {
+	// 	start := time.Now()
+	// 	c.Next()
+	// 	latency := time.Since(start)
 
-		LogRequest(zapLog,
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.ClientIP(),
-			c.Request.UserAgent(),
-			c.Writer.Status(),
-			latency,
-		)
-	})
+	// 	LogRequest(zapLog,
+	// 		c.Request.Method,
+	// 		c.Request.URL.Path,
+	// 		c.ClientIP(),
+	// 		c.Request.UserAgent(),
+	// 		c.Writer.Status(),
+	// 		latency,
+	// 	)
+	// })
 
 	// Кастомная настройка CORS
 	r.Use(cors.New(cors.Config{
@@ -159,13 +155,13 @@ func main() {
 }
 
 // ✅ Функция логирования запросов
-func LogRequest(log *zap.Logger, method, path, ip, userAgent string, status int, latency time.Duration) {
-	log.Info("🌍 HTTP-запрос",
-		zap.String("method", method),
-		zap.String("path", path),
-		zap.String("client_ip", ip),
-		zap.String("user_agent", userAgent),
-		zap.Int("status", status),
-		zap.Duration("latency", latency),
-	)
-}
+// func LogRequest(log *zap.Logger, method, path, ip, userAgent string, status int, latency time.Duration) {
+// 	log.Info("🌍 HTTP-запрос",
+// 		zap.String("method", method),
+// 		zap.String("path", path),
+// 		zap.String("client_ip", ip),
+// 		zap.String("user_agent", userAgent),
+// 		zap.Int("status", status),
+// 		zap.Duration("latency", latency),
+// 	)
+// }
