@@ -313,56 +313,6 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// func AuthMiddleware() gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		var tokenString string
-
-// 		// 1. Проверяем токен в заголовке Authorization: Bearer <TOKEN>
-// 		authHeader := c.GetHeader("Authorization")
-// 		if strings.HasPrefix(authHeader, "Bearer ") {
-// 			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
-// 		}
-
-// 		// 2. Если в заголовке нет, проверяем в cookie
-// 		if tokenString == "" {
-// 			cookieToken, err := c.Cookie("token")
-// 			if err == nil {
-// 				tokenString = cookieToken
-// 			}
-// 		}
-
-// 		// 3. Если токена нет – ошибка
-// 		if tokenString == "" {
-// 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized - token not found"})
-// 			c.Abort()
-// 			return
-// 		}
-
-// 		// 4. Проверяем валидность токена
-// 		claims, err := ValidateToken(tokenString)
-// 		if err != nil {
-// 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-// 			c.Abort()
-// 			return
-// 		}
-
-// 		// 5. Проверяем, есть ли токен в базе и не был ли он отозван
-// 		var storedToken Token
-// 		err = TokenCollection.FindOne(context.TODO(), bson.M{"token": tokenString}).Decode(&storedToken)
-// 		if err != nil || storedToken.Revoked {
-// 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token not found or revoked"})
-// 			c.Abort()
-// 			return
-// 		}
-
-// 		// 6. Сохраняем данные пользователя в контексте Gin
-// 		c.Set("username", claims.Username)
-// 		c.Set("role", claims.Role)
-
-// 		c.Next()
-// 	}
-// }
-
 // RevokeTokenHandler - обработчик отзыва токена
 func RevokeTokenHandler(c *gin.Context) {
 	tokenString := c.GetHeader("Authorization")
