@@ -2,31 +2,31 @@ package main
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.uber.org/zap"
 )
 
+// Глобальный логгер для zap
+var zapLog *zap.Logger
+
+// InitLogger инициализирует zap.Logger
+func InitLogger(logger *zap.Logger) {
+	zapLog = logger
+}
+
 // GetTasks - возвращает все задачи
-// @Summary Получить список задач
-// @Description Возвращает массив всех задач
-// @Tags Tasks
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {array} Task "Список задач"
-// @Failure 500 {object} gin.H "Ошибка сервера"
-// @Router /tasks [get]
 func GetTasks(c *gin.Context) {
-	// Берем роль из контекста (добавь в middleware установку роли в контекст)
 	role, _ := c.Get("role")
 
 	var filter bson.M
 	if role == RoleAdmin || role == RoleManager {
-		filter = bson.M{} // Admin и Manager видят все задачи
+		filter = bson.M{}
 	} else {
 		username, exists := c.Get("username")
 		if !exists {
@@ -38,71 +38,84 @@ func GetTasks(c *gin.Context) {
 
 	cursor, err := TaskCollection.Find(context.TODO(), filter)
 	if err != nil {
+		zapLog.Error("Ошибка получения задач", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения задач"})
 		return
 	}
+	defer cursor.Close(context.TODO())
 
 	var tasks []Task
 	if err = cursor.All(context.TODO(), &tasks); err != nil {
+		zapLog.Error("Ошибка обработки задач", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обработки задач"})
 		return
 	}
 
+	zapLog.Info("📋 Получены задачи", zap.Int("count", len(tasks)))
 	c.JSON(http.StatusOK, tasks)
 }
 
 // CreateTask - создает новую задачу
-// @Summary Создать задачу
-// @Description Добавляет новую задачу в базу данных
-// @Tags Tasks
-// @Accept json
-// @Produce json
-// @Param task body Task true "Данные новой задачи"
-// @Success 201 {object} Task "Созданная задача"
-// @Failure 400 {object} gin.H "Некорректные данные"
-// @Failure 500 {object} gin.H "Ошибка сервера"
-// @Security BearerAuth
-// @Router /tasks [post]
 func CreateTask(c *gin.Context) {
+	// 🛠️ Обработчик паники (чтобы сервер не падал)
+	defer func() {
+		if r := recover(); r != nil {
+			zapLog.Error("🔥 Panic caught in CreateTask", zap.Any("error", r))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
+		}
+	}()
+
+	// 🚨 Проверка zapLog
+	if zapLog == nil {
+		log.Println("❌ zapLog не инициализирован!")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сервера"})
+		return
+	}
+
+	// 🚨 Проверка подключения к MongoDB
+	if TaskCollection == nil {
+		zapLog.Error("❌ MongoDB TaskCollection не инициализирована!")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сервера"})
+		return
+	}
+
+	// 🚨 Проверка username
 	username, exists := c.Get("username")
 	if !exists {
+		zapLog.Error("❌ Не удалось получить username из контекста")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
+	zapLog.Info("👤 Username получен", zap.String("username", username.(string)))
+
+	// 🚨 Проверка данных запроса
 	var task Task
 	if err := c.BindJSON(&task); err != nil {
+		zapLog.Warn("Ошибка валидации задачи", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// 📌 Устанавливаем ID и временные метки
 	task.ID = primitive.NewObjectID()
 	task.CreatedAt = time.Now()
 	task.UpdatedAt = time.Now()
-	task.Assignee = username.(string) // Привязываем задачу к пользователю
+	task.Assignee = username.(string)
 
+	// 📌 Записываем в базу
 	_, err := TaskCollection.InsertOne(context.TODO(), task)
 	if err != nil {
+		zapLog.Error("Ошибка создания задачи", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания задачи"})
 		return
 	}
 
+	zapLog.Info("✅ Создана новая задача", zap.String("title", task.Title), zap.String("assignee", task.Assignee))
 	c.JSON(http.StatusCreated, task)
 }
 
 // UpdateTask - обновляет задачу по ID
-// @Summary Обновить задачу
-// @Description Обновляет существующую задачу по её ID
-// @Tags Tasks
-// @Accept json
-// @Produce json
-// @Param id path string true "ID задачи"
-// @Param task body Task true "Обновленные данные задачи"
-// @Success 200 {object} gin.H "Сообщение об успешном обновлении"
-// @Failure 400 {object} gin.H "Некорректные данные"
-// @Failure 500 {object} gin.H "Ошибка сервера"
-// @Security BearerAuth
-// @Router /tasks/{id} [put]
 func UpdateTask(c *gin.Context) {
 	username, exists := c.Get("username")
 	if !exists {
@@ -111,10 +124,16 @@ func UpdateTask(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	objectID, _ := primitive.ObjectIDFromHex(id)
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		zapLog.Warn("Некорректный ID задачи", zap.String("id", id))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID"})
+		return
+	}
 
 	var task Task
 	if err := c.BindJSON(&task); err != nil {
+		zapLog.Warn("Ошибка валидации обновления задачи", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректные данные"})
 		return
 	}
@@ -126,24 +145,16 @@ func UpdateTask(c *gin.Context) {
 
 	res, err := TaskCollection.UpdateOne(context.TODO(), filter, update)
 	if err != nil || res.MatchedCount == 0 {
+		zapLog.Warn("Ошибка обновления задачи", zap.String("id", id))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Вы не можете изменить эту задачу"})
 		return
 	}
 
+	zapLog.Info("✅ Задача обновлена", zap.String("id", id))
 	c.JSON(http.StatusOK, gin.H{"message": "Задача обновлена"})
 }
 
 // DeleteTask - удаляет задачу по ID
-// @Summary Удалить задачу
-// @Description Удаляет задачу по её ID
-// @Tags Tasks
-// @Accept json
-// @Produce json
-// @Param id path string true "ID задачи"
-// @Success 200 {object} gin.H "Сообщение об успешном удалении"
-// @Failure 500 {object} gin.H "Ошибка сервера"
-// @Security BearerAuth
-// @Router /tasks/{id} [delete]
 func DeleteTask(c *gin.Context) {
 	username, exists := c.Get("username")
 	if !exists {
@@ -152,14 +163,21 @@ func DeleteTask(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	objectID, _ := primitive.ObjectIDFromHex(id)
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		zapLog.Warn("Некорректный ID задачи", zap.String("id", id))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Некорректный ID"})
+		return
+	}
 
 	res, err := TaskCollection.DeleteOne(context.TODO(), bson.M{"_id": objectID, "assignee": username})
 	if err != nil || res.DeletedCount == 0 {
+		zapLog.Warn("Ошибка удаления задачи", zap.String("id", id))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Вы не можете удалить эту задачу"})
 		return
 	}
 
+	zapLog.Info("🗑️ Задача удалена", zap.String("id", id))
 	c.JSON(http.StatusOK, gin.H{"message": "Задача удалена"})
 }
 
